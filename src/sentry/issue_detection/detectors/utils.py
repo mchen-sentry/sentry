@@ -2,7 +2,7 @@ import hashlib
 import logging
 import re
 from datetime import timedelta
-from typing import Any, TypedDict
+from typing import Any, TypedDict, TypeIs
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from sentry.utils.http import is_valid_ip
@@ -455,3 +455,59 @@ def log_invalid_span_data(
             **(extra_data or {}),
         },
     )
+
+
+def _is_valid_instance[T](value: Any, desired_type: type[T]) -> TypeIs[T]:
+    if desired_type is int:
+        # Bools are technically ints, so we have to specifically exclude them
+        return isinstance(value, int) and not isinstance(value, bool)
+    else:
+        return isinstance(value, desired_type)
+
+
+def get_numeric_value_from_span[T: (int, float)](
+    span: Span,
+    keys: list[str],  # A list of keys under which to look for the dtata
+    detector: str,  # Detector idendifier to use in invalid data metrics
+    number_type: type[T],  # `int` or `float`, used for converting string values
+    default: T | None = None,  # Optional default value to return instead of None
+) -> T | None:
+    """
+    Pull a numeric value from a span's `data` attribute, attempting to convert it from a string if
+    necessary. Tracks invalid values using the `log_invalid_span_data` util. Returns `None` (or the
+    optional default, if given) for missing values and `None` for invalid values.
+    """
+
+    data = span.get("data")
+    if not data:
+        return default
+
+    value = None
+    error = None
+
+    # Some data might exist under multiple potential keys
+    for key in keys:
+        value = data.get(key)
+        if value is not None:
+            break
+
+    # If we found exactly what we wanted, nothing more to do
+    if _is_valid_instance(value, number_type):
+        return value
+
+    # If we found nothing, return the default
+    if value is None:
+        return default
+
+    # If we found something of the wrong type, try to convert it
+    if number_type is float and _is_valid_instance(value, int):
+        return float(value)
+    elif isinstance(value, str) and value.lower() != "nan":
+        try:
+            return number_type(value)
+        except Exception as err:
+            error = err
+
+    # If we land here, either it wasn't something we can convert or conversion errored out
+    log_invalid_span_data(span, detector=detector, key=key, value=value, error=error)
+    return None
