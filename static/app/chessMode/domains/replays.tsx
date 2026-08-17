@@ -122,7 +122,7 @@ export function toPgn(game: ChessGame) {
 export const CHESS_GAMES: ChessGame[] = [
   {
     id: '7b21c0f4e1a4429e9d1f3c8a6b5d2e01',
-    roomCode: 'A4V2EG',
+    roomCode: '0P3RAB',
     white: 'magnus.the.mouse',
     black: 'duke.karl',
     opening: 'Philidor Defense',
@@ -147,7 +147,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: 'c93e5a17d0b8471fae62d94c3f708b52',
-    roomCode: 'K9NX1T',
+    roomCode: '1MM0RT',
     white: 'rook.rollins',
     black: 'zugzwang.zoe',
     opening: 'King\'s Gambit Accepted',
@@ -172,7 +172,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: '2f8ab6c05d3e4a7b91c4e08f6d21937a',
-    roomCode: 'QG7B4M',
+    roomCode: '3V3RGR',
     white: 'gambit.greer',
     black: 'bishop.byte',
     opening: 'Evans Gambit',
@@ -197,7 +197,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: 'e04d7b93a256418cbf3901d7e6c58a24',
-    roomCode: 'N3PL8W',
+    roomCode: 'C3NTRY',
     white: 'castle.jenkins',
     black: 'magnus.the.mouse',
     opening: 'Grünfeld Defense',
@@ -222,7 +222,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: '9a1c46e802b74f35d8e07c2a5b91f6d3',
-    roomCode: 'F7RQ2C',
+    roomCode: 'SCH0LR',
     white: 'queen.mate',
     black: 'pawn.stark',
     opening: 'Bishop\'s Opening',
@@ -247,7 +247,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: '5d3f92b71c0a486e9f14b6d803e27c5a',
-    roomCode: 'B2ZZ9K',
+    roomCode: 'F00LSM',
     white: 'en.passant.pete',
     black: 'knight.watch',
     opening: 'Barnes Opening',
@@ -272,7 +272,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: '81ce470a92d6435fb70e5c3d8a19f24b',
-    roomCode: 'L5GT6D',
+    roomCode: 'L3G4LT',
     white: 'bishop.byte',
     black: 'pawn.stark',
     opening: 'Philidor Defense, Légal Trap',
@@ -297,7 +297,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: 'a67b02f9d84e4137c95a1e6b3d0f8724',
-    roomCode: 'C1KK7V',
+    roomCode: 'R3T1M8',
     white: 'zugzwang.zoe',
     black: 'castle.jenkins',
     opening: 'Caro-Kann Defense',
@@ -322,7 +322,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: '3e58d1a704f94b62ae83c05f7b6d29e1',
-    roomCode: 'R8WM3P',
+    roomCode: 'RUB1N5',
     white: 'knight.watch',
     black: 'magnus.the.mouse',
     opening: 'Queen\'s Gambit Declined',
@@ -347,7 +347,7 @@ export const CHESS_GAMES: ChessGame[] = [
   },
   {
     id: 'd2470b8e91a34c65f0d3a7c86e15b934',
-    roomCode: 'T6HD5J',
+    roomCode: 'T0RR3M',
     white: 'magnus.the.mouse',
     black: 'gambit.greer',
     opening: 'Philidor Defense',
