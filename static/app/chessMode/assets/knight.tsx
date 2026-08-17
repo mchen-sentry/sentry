@@ -31,7 +31,7 @@ export const KNIGHT_HEAD_PATH =
  * exactly one source. URL-encoded rather than base64 so it stays readable in
  * devtools, and no network request is involved either way.
  */
-export const KNIGHT_AVATAR_DATA_URI: string = `data:image/svg+xml,${encodeURIComponent(
+export const KNIGHT_AVATAR_DATA_URI = `data:image/svg+xml,${encodeURIComponent(
   [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${KNIGHT_VIEWBOX}" width="64" height="64">`,
     '<rect width="32" height="32" rx="7" fill="#6C5FC7"/>',
