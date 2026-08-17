@@ -2,8 +2,8 @@ import {Fragment, type PropsWithChildren, type RefObject, useMemo, useRef} from 
 import {mergeProps} from '@react-aria/utils';
 import {motion, type MotionProps} from 'framer-motion';
 
-import {Stack} from '@sentry/scraps/layout';
-import {Flex} from '@sentry/scraps/layout';
+import {Button} from '@sentry/scraps/button';
+import {Flex, Stack} from '@sentry/scraps/layout';
 import {SizeProvider} from '@sentry/scraps/sizeContext';
 
 import {KnightMark} from 'sentry/chessMode/assets/knight';
@@ -80,11 +80,22 @@ export function Navigation() {
     <Fragment>
       <PrimaryNavigation.Sidebar>
         <PrimaryNavigation.SidebarHeader>
-          {/* Pawn Patrol: knight mark sits beside the org switcher. */}
-          <Flex align="center" gap="xs">
-            <KnightMark height="24px" />
-            <OrganizationDropdown />
-          </Flex>
+          {/*
+           * Pawn Patrol: the rail carries a single mark, the way Sentry's does.
+           * The knight is the product mark AND the org-switcher trigger, so the
+           * org avatar lives inside the menu instead of crowding the rail.
+           */}
+          <OrganizationDropdown
+            renderTrigger={triggerProps => (
+              <Button
+                {...triggerProps}
+                variant="transparent"
+                size="sm"
+                aria-label={t('Toggle organization menu')}
+                icon={<KnightMark height="22px" />}
+              />
+            )}
+          />
         </PrimaryNavigation.SidebarHeader>
         <PrimaryNavigation.List ref={ref}>
           <PrimaryNavigationItems listRef={ref} />
@@ -257,7 +268,7 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
         <PrimaryNavigation.Link
           to={`/${prefix}/monitors/`}
           analyticsKey="monitors"
-          label={t('Monitors')}
+          label={t('Clocks')}
           {...makeNavigationItemProps('monitors', `/${prefix}/monitors/`)}
         >
           <IconSiren />

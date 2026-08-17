@@ -33,6 +33,12 @@ interface OrganizationDropdownProps {
    */
   hideCurrentOrganizationLinks?: boolean;
   onClick?: () => void;
+  /**
+   * Pawn Patrol: render a custom trigger in place of the org avatar. The nav
+   * rail carries a single mark (the knight), and the org avatar lives inside
+   * the menu rather than beside it.
+   */
+  renderTrigger?: (triggerProps: Record<string, any>) => React.ReactNode;
 }
 
 export function OrganizationDropdown(props: OrganizationDropdownProps) {
@@ -68,36 +74,46 @@ export function OrganizationDropdown(props: OrganizationDropdownProps) {
       usePortal
       portalContainerRef={portalContainerRef}
       zIndex={theme.zIndex.modal}
-      trigger={triggerProps => (
-        <AvatarButton
-          avatar={
-            organization.avatar.avatarType === 'upload' && organization.avatar.avatarUrl
-              ? {
-                  type: 'upload',
-                  uploadUrl: organization.avatar.avatarUrl,
-                  ...letterAvatarProps,
-                }
-              : organization.avatar.avatarType === 'gravatar' &&
-                  organization.avatar.avatarUrl
+      trigger={triggerProps =>
+        props.renderTrigger ? (
+          props.renderTrigger({
+            ...triggerProps,
+            onClick: (e: any) => {
+              triggerProps.onClick?.(e);
+              props.onClick?.();
+            },
+          })
+        ) : (
+          <AvatarButton
+            avatar={
+              organization.avatar.avatarType === 'upload' && organization.avatar.avatarUrl
                 ? {
-                    type: 'gravatar',
-                    gravatarId: organization.avatar.avatarUrl,
+                    type: 'upload',
+                    uploadUrl: organization.avatar.avatarUrl,
                     ...letterAvatarProps,
                   }
-                : {
-                    type: 'letter_avatar',
-                    ...letterAvatarProps,
-                  }
-          }
-          size={size}
-          aria-label={t('Toggle organization menu')}
-          {...triggerProps}
-          onClick={e => {
-            triggerProps.onClick?.(e);
-            props.onClick?.();
-          }}
-        />
-      )}
+                : organization.avatar.avatarType === 'gravatar' &&
+                    organization.avatar.avatarUrl
+                  ? {
+                      type: 'gravatar',
+                      gravatarId: organization.avatar.avatarUrl,
+                      ...letterAvatarProps,
+                    }
+                  : {
+                      type: 'letter_avatar',
+                      ...letterAvatarProps,
+                    }
+            }
+            size={size}
+            aria-label={t('Toggle organization menu')}
+            {...triggerProps}
+            onClick={e => {
+              triggerProps.onClick?.(e);
+              props.onClick?.();
+            }}
+          />
+        )
+      }
       position="right-start"
       minMenuWidth={200}
       items={[

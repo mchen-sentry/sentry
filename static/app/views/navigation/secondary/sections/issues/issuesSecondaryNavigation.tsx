@@ -82,7 +82,7 @@ export function IssuesSecondaryNavigation() {
                 to={`${baseUrl}/feedback/`}
                 analyticsItemName="issues_feedback"
               >
-                {t('User Feedback')}
+                {t('Opponent Feedback')}
               </SecondaryNavigation.Link>
             </SecondaryNavigation.ListItem>
           </SecondaryNavigation.List>
@@ -90,7 +90,7 @@ export function IssuesSecondaryNavigation() {
         {!hasProgressUi && (
           <Fragment>
             <SecondaryNavigation.Separator />
-            <SecondaryNavigation.Section id="issues-autofix" title={t('Game Reviews')}>
+            <SecondaryNavigation.Section id="issues-autofix" title={t('Seer')}>
               <SecondaryNavigation.List>
                 <SecondaryNavigation.ListItem>
                   <SecondaryNavigation.Link

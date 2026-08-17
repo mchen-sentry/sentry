@@ -81,8 +81,8 @@ function AccordionWidget({
             </EmptyHeader>
             <EmptySubtitle>
               {tct(
-                'There were no [type] clicks within this timeframe. Expand your timeframe, or increase your replay sample rate to see more data.',
-                {type: deadOrRage}
+                'There were no [type] moves within this timeframe. Expand your timeframe, or lower your rating floor to see more data.',
+                {type: deadOrRage === 'dead' ? 'blundered' : 'rage-resigned'}
               )}
             </EmptySubtitle>
           </StyledEmptyStateWarning>
@@ -151,24 +151,24 @@ function SelectorCardHeader({deadOrRage}: {deadOrRage: DeadOrRage}) {
     <div>
       <StyledWidgetHeader>
         <Flex align="center" gap="md">
-          {deadOrRage === 'dead' ? t('Most Dead Clicks') : t('Most Rage Clicks')}
+          {deadOrRage === 'dead' ? t('Most Blunders') : t('Most Rage Resigns')}
           <QuestionTooltip
             size="xs"
             position="top"
             title={
               deadOrRage === 'dead'
                 ? t(
-                    'The top selectors your users have dead clicked on (i.e., a user click that does not result in any page activity after 7 seconds).'
+                    'The openings your players blunder in most often (i.e., a move that swings the evaluation by more than 3 pawns).'
                   )
                 : t(
-                    'The top selectors your users have rage clicked on (i.e., 5 or more clicks on a dead element, which exhibits no page activity after 7 seconds).'
+                    'The openings your players resign fastest in (i.e., a resignation within 5 moves of a losing evaluation).'
                   )
             }
             isHoverable
           />
         </Flex>
       </StyledWidgetHeader>
-      <Subtitle>{t('Suggested replays to watch')}</Subtitle>
+      <Subtitle>{t('Suggested games to watch')}</Subtitle>
     </div>
   );
 }

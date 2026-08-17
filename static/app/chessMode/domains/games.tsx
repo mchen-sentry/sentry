@@ -115,8 +115,6 @@ type GameSeed = {
   black: string;
   blackAcc: number;
   blackElo: number;
-  /** subtitle under the title in the stream */
-  culprit: string;
   eco: string;
   /** exception type shown on the stack trace header */
   errType: string;
@@ -133,7 +131,6 @@ type GameSeed = {
   priority: 'high' | 'medium' | 'low';
   result: '1-0' | '0-1' | '1/2-1/2';
   room: string;
-  spectators: number;
   status: 'unresolved' | 'resolved' | 'ignored';
   termination: string;
   timeControl: string;
@@ -145,17 +142,14 @@ type GameSeed = {
   assignee?: number | null;
   comments?: number;
   hasSeen?: boolean;
-  substatus?: string | null;
 };
 
 const GAMES: GameSeed[] = [
   {
-    title: 'Blunder: Qg5?? hung the queen — room A4V2EG',
-    culprit: 'Italian Game, Giuoco Pianissimo (C50) · 3+2 blitz',
+    title: 'ReferenceError: queen is not defended',
     level: 'fatal',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'new',
     room: 'A4V2EG',
     eco: 'C50',
     opening: 'Italian Game, Giuoco Pianissimo',
@@ -175,18 +169,15 @@ const GAMES: GameSeed[] = [
     errType: 'HangingPiece',
     errValue: 'Queen left en prise on g5 (eval +0.4 → -8.7)',
     hoursAgo: 2,
-    spectators: 41,
     assignee: 0,
     hasSeen: false,
     comments: 3,
   },
   {
-    title: 'Draw by repetition after 62 moves of shuffling',
-    culprit: "Queen's Gambit Declined, Exchange (D35) · 15+10 rapid",
+    title: 'RangeError: Maximum call stack size exceeded',
     level: 'warning',
     priority: 'low',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'RP3T1D',
     eco: 'D35',
     opening: "Queen's Gambit Declined, Exchange Variation",
@@ -206,17 +197,14 @@ const GAMES: GameSeed[] = [
     errType: 'PositionRepeated',
     errValue: 'Identical position reached 3 times (moves 54, 58, 62)',
     hoursAgo: 9,
-    spectators: 3,
     assignee: null,
     hasSeen: true,
   },
   {
-    title: 'White wins on time — opponent tabbed out to check Slack',
-    culprit: 'Sicilian Defense, Najdorf (B90) · 5+0 blitz',
+    title: 'TimeoutError: opponent stopped responding (tab backgrounded)',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'SLK42Q',
     eco: 'B90',
     opening: 'Sicilian Defense, Najdorf Variation',
@@ -236,17 +224,14 @@ const GAMES: GameSeed[] = [
     errType: 'ClockFlag',
     errValue: 'Black clock hit 0:00.0 with 4 legal moves available',
     hoursAgo: 26,
-    spectators: 12,
     assignee: 4,
     hasSeen: true,
   },
   {
     title: "Scholar's Mate in 4 — again",
-    culprit: "Bishop's Opening, Scholar's Mate (C23) · 10+0 rapid",
     level: 'error',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'escalating',
     room: 'SCH00L',
     eco: 'C23',
     opening: "Bishop's Opening, Scholar's Mate line",
@@ -265,18 +250,15 @@ const GAMES: GameSeed[] = [
     errType: 'Checkmate',
     errValue: 'f7 defended only by the king; Qxf7# unstoppable',
     hoursAgo: 51,
-    spectators: 88,
     assignee: 1,
     hasSeen: false,
     comments: 7,
   },
   {
-    title: 'Stalemate with queen and rook still on the board',
-    culprit: 'Nimzo-Indian Defense, Rubinstein (E46) · 10+5 rapid',
+    title: 'IllegalStateException: no legal moves, not in check',
     level: 'error',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'ST4LEM',
     eco: 'E46',
     opening: 'Nimzo-Indian Defense, Rubinstein Variation',
@@ -303,17 +285,14 @@ const GAMES: GameSeed[] = [
     errType: 'Stalemate',
     errValue: 'Black to move, 0 legal moves, not in check (eval was +M3)',
     hoursAgo: 74,
-    spectators: 19,
     assignee: null,
     hasSeen: true,
   },
   {
-    title: 'Missed mate in 1, played a3 instead',
-    culprit: 'Ruy Lopez, Berlin Defense (C67) · 3+0 blitz',
+    title: 'AssertionError: expected Rd8#, got a3',
     level: 'error',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'new',
     room: 'M1SS3D',
     eco: 'C67',
     opening: 'Ruy Lopez, Berlin Defense',
@@ -333,17 +312,14 @@ const GAMES: GameSeed[] = [
     errType: 'MissedMate',
     errValue: 'Mate in 1 available (Rd8#); a3 played instead (eval +M1 → -3.2)',
     hoursAgo: 5,
-    spectators: 27,
     assignee: 2,
     hasSeen: false,
   },
   {
-    title: 'Resigned in a winning position (+7.4)',
-    culprit: 'King\'s Indian Defense, Mar del Plata (E97) · 30+0 classical',
+    title: 'UnhandledPromiseRejection: resigned at +7.4',
     level: 'fatal',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'escalating',
     room: 'GG4RLY',
     eco: 'E97',
     opening: 'King\'s Indian Defense, Mar del Plata',
@@ -363,18 +339,15 @@ const GAMES: GameSeed[] = [
     errType: 'PrematureResignation',
     errValue: 'Resign submitted at eval +7.4 with a forced win in 6',
     hoursAgo: 38,
-    spectators: 214,
     assignee: 0,
     hasSeen: false,
     comments: 12,
   },
   {
     title: 'Fork: Nc7+ took the king and the rook',
-    culprit: 'Caro-Kann Defense, Classical (B18) · 10+0 rapid',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'F0RK1T',
     eco: 'B18',
     opening: 'Caro-Kann Defense, Classical Variation',
@@ -394,17 +367,14 @@ const GAMES: GameSeed[] = [
     errType: 'RoyalFork',
     errValue: 'Nc7+ forks Ke8 and Ra8 (eval +1.1 → +6.9)',
     hoursAgo: 96,
-    spectators: 34,
     assignee: 1,
     hasSeen: true,
   },
   {
-    title: 'En passant refused — "that\'s illegal" (it was legal)',
-    culprit: 'French Defense, Advance Variation (C02) · 5+3 blitz',
+    title: 'AssertionError: expected legal move, got user opinion',
     level: 'warning',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'EPCRIM',
     eco: 'C02',
     opening: 'French Defense, Advance Variation',
@@ -423,18 +393,15 @@ const GAMES: GameSeed[] = [
     errType: 'IllegalMoveRejected',
     errValue: 'Client rejected legal capture dxc6 e.p.; 24s spent arguing in chat',
     hoursAgo: 15,
-    spectators: 61,
     assignee: null,
     hasSeen: false,
     comments: 21,
   },
   {
-    title: 'Back-rank mate: luft never created in 41 moves',
-    culprit: 'English Opening, Symmetrical (A30) · 15+10 rapid',
+    title: 'SegmentationFault: back rank not mapped',
     level: 'error',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'B4CKRK',
     eco: 'A30',
     opening: 'English Opening, Symmetrical Variation',
@@ -454,17 +421,14 @@ const GAMES: GameSeed[] = [
     errType: 'BackRankMate',
     errValue: 'Back rank undefended for 41 moves; h2-h3 never played',
     hoursAgo: 45,
-    spectators: 8,
     assignee: 3,
     hasSeen: true,
   },
   {
-    title: 'Hung the bishop on move 6 of the London System',
-    culprit: 'London System (D02) · 3+2 blitz',
+    title: 'NullPointerException: b2 undefined after Qb6',
     level: 'error',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'new',
     room: 'L0ND0N',
     eco: 'D02',
     opening: 'London System',
@@ -483,17 +447,14 @@ const GAMES: GameSeed[] = [
     errType: 'HangingPiece',
     errValue: 'b2 pawn and Rb1 both undefended after Qb6 (eval +0.1 → -4.8)',
     hoursAgo: 7,
-    spectators: 15,
     assignee: null,
     hasSeen: false,
   },
   {
-    title: 'Threefold repetition claimed at move 118',
-    culprit: 'Slav Defense, Chameleon (D15) · 30+20 classical',
+    title: 'MaxRetriesExceeded: position repeated 3 times',
     level: 'warning',
     priority: 'low',
     status: 'ignored',
-    substatus: 'archived_until_escalating',
     room: 'L00PY7',
     eco: 'D15',
     opening: 'Slav Defense, Chameleon Variation',
@@ -513,17 +474,14 @@ const GAMES: GameSeed[] = [
     errType: 'PositionRepeated',
     errValue: 'Same position, same side to move, 3rd occurrence at ply 235',
     hoursAgo: 172,
-    spectators: 2,
     assignee: null,
     hasSeen: true,
   },
   {
-    title: 'Flagged with mate in 1 on the board',
-    culprit: 'Scandinavian Defense, Mieses-Kotroc (B01) · 1+0 bullet',
+    title: 'TimeoutError: clock exceeded while holding mate in 1',
     level: 'fatal',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'escalating',
     room: 'FL4G1T',
     eco: 'B01',
     opening: 'Scandinavian Defense, Mieses-Kotroc Variation',
@@ -543,18 +501,15 @@ const GAMES: GameSeed[] = [
     errType: 'ClockFlag',
     errValue: 'White flagged at 0:00.0 holding mate in 1 (Rd8#)',
     hoursAgo: 3,
-    spectators: 156,
     assignee: 4,
     hasSeen: false,
     comments: 5,
   },
   {
-    title: 'Castled into a mating net (O-O??)',
-    culprit: 'Vienna Game, Frankenstein-Dracula (C27) · 5+0 blitz',
+    title: 'SecurityError: king relocated to hostile origin',
     level: 'fatal',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'new',
     room: 'C4STL3',
     eco: 'C27',
     opening: 'Vienna Game, Frankenstein-Dracula Variation',
@@ -574,17 +529,14 @@ const GAMES: GameSeed[] = [
     errType: 'MatingNet',
     errValue: 'O-O walks into Qf3-f7#; king safer on d8 (eval -2.1 → -M2)',
     hoursAgo: 11,
-    spectators: 47,
     assignee: 2,
     hasSeen: false,
   },
   {
     title: 'Insufficient material: K+N vs K after 89 moves',
-    culprit: 'Petrov Defense, Classical Attack (C42) · 15+10 rapid',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'K1NGKN',
     eco: 'C42',
     opening: 'Petrov Defense, Classical Attack',
@@ -604,17 +556,14 @@ const GAMES: GameSeed[] = [
     errType: 'DeadPosition',
     errValue: 'K+N vs K — no forced mate exists, draw declared',
     hoursAgo: 120,
-    spectators: 6,
     assignee: null,
     hasSeen: true,
   },
   {
-    title: 'Queen sac accepted — turned out to be a real sacrifice',
-    culprit: 'Evans Gambit, Compromised Defense (C52) · 10+0 rapid',
+    title: 'ArithmeticError: compensation evaluated to NaN',
     level: 'error',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'S4CR1F',
     eco: 'C52',
     opening: 'Evans Gambit, Compromised Defense',
@@ -634,18 +583,15 @@ const GAMES: GameSeed[] = [
     errType: 'UnsoundSacrifice',
     errValue: 'Qxe5 sac gives no compensation (eval +0.6 → -5.3)',
     hoursAgo: 33,
-    spectators: 73,
     assignee: 0,
     hasSeen: true,
     comments: 2,
   },
   {
-    title: 'Opponent disconnected on move 3, waited 90 seconds',
-    culprit: 'Van Geet Opening (A00) · 3+0 blitz',
+    title: 'ECONNRESET: opponent connection reset by peer',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'D1SC0N',
     eco: 'A00',
     opening: 'Van Geet Opening (Dunst)',
@@ -664,17 +610,14 @@ const GAMES: GameSeed[] = [
     errType: 'ConnectionLost',
     errValue: 'No heartbeat from black for 90s; game awarded to white',
     hoursAgo: 64,
-    spectators: 1,
     assignee: null,
     hasSeen: true,
   },
   {
-    title: 'Traded down into a lost pawn endgame',
-    culprit: 'Symmetrical English, Four Knights (A35) · 15+10 rapid',
+    title: 'MemoryLeak: advantage freed during simplification',
     level: 'warning',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'TR4D3S',
     eco: 'A35',
     opening: 'English Opening, Symmetrical Four Knights',
@@ -694,17 +637,14 @@ const GAMES: GameSeed[] = [
     errType: 'LostEndgame',
     errValue: 'Outside passed pawn on the a-file decides (eval -0.3 → -4.1)',
     hoursAgo: 58,
-    spectators: 11,
     assignee: 3,
     hasSeen: true,
   },
   {
     title: 'Bongcloud opening (1. e4 e5 2. Ke2) — and it worked',
-    culprit: "Bongcloud Attack (C20) · 1+0 bullet",
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'B0NGCL',
     eco: 'C20',
     opening: 'Bongcloud Attack',
@@ -724,18 +664,15 @@ const GAMES: GameSeed[] = [
     errType: 'KingWalk',
     errValue: 'Ke2 on move 2 (eval +0.3 → -0.4). Held anyway.',
     hoursAgo: 143,
-    spectators: 902,
     assignee: 1,
     hasSeen: true,
     comments: 34,
   },
   {
     title: 'Touch-move dispute escalated to the arbiter',
-    culprit: 'Grünfeld Defense, Exchange (D85) · classical OTB',
     level: 'error',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'escalating',
     room: 'ARB1TR',
     eco: 'D85',
     opening: 'Grünfeld Defense, Exchange Variation',
@@ -755,18 +692,15 @@ const GAMES: GameSeed[] = [
     errType: 'RuleViolation',
     errValue: 'Piece touched (Nc6) then a different piece moved; arbiter ruled forfeit',
     hoursAgo: 81,
-    spectators: 130,
     assignee: 2,
     hasSeen: false,
     comments: 18,
   },
   {
     title: 'Promoted to a knight for no reason, still won',
-    culprit: 'Alekhine Defense, Modern (B04) · 10+0 rapid',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'UNDRPR',
     eco: 'B04',
     opening: 'Alekhine Defense, Modern Variation',
@@ -786,17 +720,14 @@ const GAMES: GameSeed[] = [
     errType: 'Underpromotion',
     errValue: 'e8=N chosen over e8=Q with mate available either way',
     hoursAgo: 110,
-    spectators: 58,
     assignee: null,
     hasSeen: true,
   },
   {
-    title: '50-move rule triggered in K+B+N vs K',
-    culprit: 'Trompowsky Attack (A45) · 30+0 classical',
+    title: 'DeadlineExceeded: 100 half-moves without progress',
     level: 'warning',
     priority: 'medium',
     status: 'unresolved',
-    substatus: 'ongoing',
     room: 'BN_M4T',
     eco: 'A45',
     opening: 'Trompowsky Attack',
@@ -816,17 +747,14 @@ const GAMES: GameSeed[] = [
     errType: 'FiftyMoveRule',
     errValue: '100 half-moves without a capture or pawn move; mate not found in time',
     hoursAgo: 160,
-    spectators: 4,
     assignee: 4,
     hasSeen: true,
   },
   {
     title: 'Perpetual check saved a dead-lost position',
-    culprit: 'Benoni Defense, Taimanov (A67) · 5+3 blitz',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'P3RP3T',
     eco: 'A67',
     opening: 'Benoni Defense, Taimanov Attack',
@@ -846,17 +774,14 @@ const GAMES: GameSeed[] = [
     errType: 'PerpetualCheck',
     errValue: 'Black cannot escape checks on d3/d4 (eval -6.8 → 0.00)',
     hoursAgo: 88,
-    spectators: 66,
     assignee: 0,
     hasSeen: true,
   },
   {
     title: 'Smothered mate: Nf7# with everything defended',
-    culprit: 'Philidor Defense, Lion Variation (C41) · 10+0 rapid',
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    substatus: null,
     room: 'SM0TH3',
     eco: 'C41',
     opening: 'Philidor Defense, Lion Variation',
@@ -875,18 +800,15 @@ const GAMES: GameSeed[] = [
     errType: 'SmotheredMate',
     errValue: 'King boxed by its own pieces; Nd5# with 0 escape squares',
     hoursAgo: 20,
-    spectators: 92,
     assignee: 1,
     hasSeen: true,
     comments: 4,
   },
   {
-    title: 'Mouse slip: Rxh7 instead of Rxh8, dropped the exchange',
-    culprit: 'Dutch Defense, Leningrad (A88) · 3+0 blitz',
+    title: 'TypeError: Cannot read properties of undefined (reading \'h8\')',
     level: 'fatal',
     priority: 'high',
     status: 'unresolved',
-    substatus: 'new',
     room: 'M0US3X',
     eco: 'A88',
     opening: 'Dutch Defense, Leningrad Variation',
@@ -906,7 +828,6 @@ const GAMES: GameSeed[] = [
     errType: 'MouseSlip',
     errValue: 'Drop released on h7 instead of h8 (eval +2.9 → -4.6)',
     hoursAgo: 1,
-    spectators: 23,
     assignee: null,
     hasSeen: false,
     comments: 1,
@@ -978,12 +899,42 @@ function phaseFor(index: number, total: number) {
 
 type Ply = {
   clock: string;
+  color: string;
   evalAfter: string;
+  evalBand: string;
   grade: Grade;
   index: number;
   label: string;
+  phase: string;
+  piece: string;
   san: string;
+  timePressure: string;
 };
+
+const PIECE_NAMES: Record<string, string> = {
+  K: 'king',
+  Q: 'queen',
+  R: 'rook',
+  B: 'bishop',
+  N: 'knight',
+};
+
+function pieceMoved(san: string) {
+  if (san.startsWith('O-O')) {
+    return 'king';
+  }
+  return PIECE_NAMES[san[0]!] ?? 'pawn';
+}
+
+function evalBand(score: number) {
+  if (Math.abs(score) < 0.5) {
+    return 'equal';
+  }
+  if (Math.abs(score) < 3) {
+    return score > 0 ? 'white better' : 'black better';
+  }
+  return score > 0 ? 'white winning' : 'black winning';
+}
 
 type Game = ReturnType<typeof buildGame>;
 
@@ -1017,6 +968,13 @@ function buildGame(seed: GameSeed, i: number) {
       label: moveLabel(index, san),
       evalAfter: `${evalScore >= 0 ? '+' : ''}${evalScore.toFixed(2)}`,
       clock: `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`,
+      // Facets that vary move to move, so the tag distribution card has
+      // something to stagger instead of five 100% bars.
+      color: index % 2 === 0 ? 'white' : 'black',
+      phase: phaseFor(index, sans.length),
+      piece: pieceMoved(san),
+      evalBand: evalBand(evalScore),
+      timePressure: remaining < 30 ? 'true' : 'false',
     };
   });
 
@@ -1025,10 +983,38 @@ function buildGame(seed: GameSeed, i: number) {
     return acc;
   }, {});
 
-  const lastSeen = iso(seed.hoursAgo * 3600 * 1000);
+  const lastSeenMs = NOW - seed.hoursAgo * 3600 * 1000;
   // a game "starts" when the first move is played
   const durationMs = Math.max(120, plies.length * 14) * 1000;
-  const firstSeen = iso(seed.hoursAgo * 3600 * 1000 + durationMs);
+  const firstSeenMs = lastSeenMs - durationMs;
+  const lastSeen = new Date(lastSeenMs).toISOString();
+  const firstSeen = new Date(firstSeenMs).toISOString();
+
+  // Events are plies and users are the spectators among them, so users can
+  // never exceed events — the fastest way to spot fabricated Sentry data.
+  const drama = 0.15 + rand() * 0.45 + (LEVEL_RANK[seed.level]! - 1) * 0.05;
+  const spectators = Math.max(1, Math.round(plies.length * Math.min(drama, 0.75)));
+
+  // The critical move is what a Sentry culprit points at.
+  const criticalPly =
+    plies.find(p => p.grade === 'blunder') ??
+    plies.find(p => p.grade === 'mistake' || p.grade === 'miss') ??
+    plies[plies.length - 1]!;
+  const culprit = culpritFor(seed, criticalPly);
+
+  // "Unhandled" earns its meaning: a blunder you never noticed. If the same
+  // side found a best/brilliant move within the next two of its own moves,
+  // you saw it and fought back, so the issue is handled.
+  const blunderPly = plies.find(p => p.grade === 'blunder');
+  const isUnhandled =
+    !!blunderPly &&
+    !plies.some(
+      p =>
+        p.index > blunderPly.index &&
+        p.index <= blunderPly.index + 4 &&
+        p.color === blunderPly.color &&
+        (p.grade === 'best' || p.grade === 'brilliant')
+    );
 
   const loser =
     seed.result === '1-0' ? seed.black : seed.result === '0-1' ? seed.white : seed.black;
@@ -1052,8 +1038,15 @@ function buildGame(seed: GameSeed, i: number) {
     accuracy: accuracyBucket(Math.min(seed.whiteAcc, seed.blackAcc)),
     plies: String(plies.length),
     level: seed.level,
-    'game.phase': phaseFor(plies.length - 1, plies.length),
     engine: 'stockfish@17.1',
+    annotation: GRADE_SYMBOL[criticalPly.grade] || 'book',
+    // These five come from the critical move; the group tag endpoint reports
+    // the full per-ply distribution for them.
+    phase: criticalPly.phase,
+    piece: criticalPly.piece,
+    eval_band: criticalPly.evalBand,
+    time_pressure: criticalPly.timePressure,
+    color: criticalPly.color,
   };
 
   return {
@@ -1067,10 +1060,40 @@ function buildGame(seed: GameSeed, i: number) {
     tags,
     loser,
     assignee,
+    culprit,
+    criticalPly,
+    spectators,
+    isUnhandled,
     firstSeen,
     lastSeen,
-    stats: buildStats(i, plies.length),
+    firstSeenMs,
+    lastSeenMs,
+    stats: buildStats(i, plies.length, firstSeenMs, lastSeenMs),
   };
+}
+
+/**
+ * Sentry renders a title as `type: value`, so when a game's title already reads
+ * that way the stack-trace header should use the same class rather than a
+ * second, different one.
+ */
+function exceptionType(seed: GameSeed) {
+  return /^([A-Za-z_][A-Za-z0-9_]*):\s/.exec(seed.title)?.[1] ?? seed.errType;
+}
+
+/** Sentry culprits read `path in function`; so do these. */
+function culpritFor(seed: GameSeed, ply: Ply) {
+  const slug = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  const moveNo = Math.floor(ply.index / 2) + 1;
+  const path =
+    ply.phase === 'opening'
+      ? `openings/${slug(seed.opening.split(',')[0]!)}.ts`
+      : `${ply.phase}/${ply.piece}.ts`;
+  return `${path} in move${moveNo}`;
 }
 
 function accuracyBucket(acc: number) {
@@ -1086,16 +1109,41 @@ function accuracyBucket(acc: number) {
   return 'poor';
 }
 
-function buildStats(i: number, plies: number) {
+/**
+ * A finished game is a burst, not a stream: the moves land inside the window
+ * the game was played in and there is dead air on either side. Sparkline shape
+ * is the first thing a Sentry user reads, so a flat noisy line would give the
+ * fixture away immediately.
+ */
+function buildStats(i: number, plies: number, firstSeenMs: number, lastSeenMs: number) {
   const rand = makeRng(i + 31);
   const nowSec = Math.floor(NOW / 1000);
+  const startSec = Math.floor(firstSeenMs / 1000);
+  const endSec = Math.floor(lastSeenMs / 1000);
+
   const series = (buckets: number, stepSec: number) => {
     const out: Array<[number, number]> = [];
+    const live: number[] = [];
     for (let b = buckets - 1; b >= 0; b--) {
-      out.push([nowSec - b * stepSec, Math.round(rand() * (plies / 6) + rand() * 3)]);
+      const ts = nowSec - b * stepSec;
+      if (ts + stepSec > startSec && ts <= endSec) {
+        live.push(out.length);
+      }
+      out.push([ts, 0]);
     }
+    // The whole game happened inside one bucket at this resolution.
+    if (!live.length && endSec > nowSec - buckets * stepSec) {
+      live.push(out.length - 1 - Math.floor((nowSec - endSec) / stepSec));
+    }
+    distribute(plies, live.length).forEach((count, n) => {
+      const slot = live[n];
+      if (slot !== undefined && out[slot]) {
+        out[slot]![1] = count + Math.floor(rand() * 2);
+      }
+    });
     return out;
   };
+
   return {
     '24h': series(24, 3600),
     '14d': series(14, 86400),
@@ -1103,25 +1151,71 @@ function buildStats(i: number, plies: number) {
   };
 }
 
+/** Split `total` across `slots` so the parts sum to exactly `total`. */
+function distribute(total: number, slots: number): number[] {
+  if (slots <= 0) {
+    return [];
+  }
+  const base = Math.floor(total / slots);
+  const out = new Array(slots).fill(base);
+  let remainder = total - base * slots;
+  for (let n = 0; remainder > 0; n = (n + 1) % slots, remainder--) {
+    out[n]++;
+  }
+  return out;
+}
+
 const ALL_GAMES = GAMES.map(buildGame);
 const BY_ID = new Map(ALL_GAMES.map(g => [g.id, g]));
 const BY_SHORT_ID = new Map(ALL_GAMES.map(g => [g.shortId.toLowerCase(), g]));
+
+/**
+ * The most recent game for each mistake that shows up more than once. Those are
+ * the only issues allowed to say "Regressed" — a finished game cannot escalate,
+ * but making the same mistake again is exactly what a regression is.
+ */
+const REGRESSED_IDS = new Set(
+  Object.values(
+    ALL_GAMES.reduce<Record<string, Game[]>>((acc, g) => {
+      (acc[g.seed.errType] ??= []).push(g);
+      return acc;
+    }, {})
+  )
+    .filter(group => group.length > 1)
+    .map(group => group.reduce((a, b) => (a.lastSeenMs > b.lastSeenMs ? a : b)).id)
+);
+
+function substatusFor(game: Game) {
+  switch (game.seed.status) {
+    case 'resolved':
+      return null;
+    case 'ignored':
+      return 'archived_until_escalating';
+    default:
+      break;
+  }
+  if (REGRESSED_IDS.has(game.id)) {
+    return 'regressed';
+  }
+  return game.seed.hoursAgo < 12 ? 'new' : 'ongoing';
+}
 
 // Group + event builders
 
 function buildGroup(game: Game): any {
   const {seed} = game;
+  const substatus = substatusFor(game);
   return {
     id: game.id,
     shareId: null,
     shortId: game.shortId,
     title: seed.title,
-    culprit: seed.culprit,
+    culprit: game.culprit,
     permalink: `/organizations/${ORG_SLUG}/issues/${game.id}/`,
     logger: 'pawn-patrol.engine',
     level: seed.level,
     status: seed.status,
-    substatus: seed.substatus ?? null,
+    substatus,
     statusDetails: {},
     isPublic: false,
     platform: 'javascript',
@@ -1132,7 +1226,7 @@ function buildGroup(game: Game): any {
     priority: seed.priority,
     priorityLockedAt: null,
     metadata: {
-      type: seed.errType,
+      type: exceptionType(seed),
       value: seed.errValue,
       title: seed.title,
       function: seed.room,
@@ -1152,16 +1246,16 @@ function buildGroup(game: Game): any {
     subscriptionDetails: null,
     hasSeen: seed.hasSeen ?? false,
     annotations: [],
-    isUnhandled: seed.level === 'fatal',
+    isUnhandled: game.isUnhandled,
     count: String(game.plies.length),
-    userCount: seed.spectators,
+    userCount: game.spectators,
     firstSeen: game.firstSeen,
     lastSeen: game.lastSeen,
     stats: game.stats,
     filtered: null,
     lifetime: {
       count: String(game.plies.length),
-      userCount: seed.spectators,
+      userCount: game.spectators,
       firstSeen: game.firstSeen,
       lastSeen: game.lastSeen,
       stats: game.stats,
@@ -1173,7 +1267,7 @@ function buildGroup(game: Game): any {
     activity: buildActivity(game),
     owners: [],
     inbox:
-      seed.substatus === 'new'
+      substatus === 'new'
         ? {reason: 0, reason_details: null, date_added: game.lastSeen}
         : null,
     pluginActions: [],
@@ -1388,12 +1482,12 @@ function buildEvent(game: Game, eventId?: string): any {
     groupID: game.id,
     projectID: PROJECT_ID,
     title: seed.title,
-    culprit: seed.culprit,
+    culprit: game.culprit,
     message: seed.errValue,
     platform: 'javascript',
     type: 'error',
     metadata: {
-      type: seed.errType,
+      type: exceptionType(seed),
       value: seed.errValue,
       title: seed.title,
       filename: 'game.pgn',
@@ -1481,7 +1575,7 @@ function buildEvent(game: Game, eventId?: string): any {
           hasSystemFrames: true,
           values: [
             {
-              type: seed.errType,
+              type: exceptionType(seed),
               value: seed.errValue,
               module: 'pawn_patrol.engine.review',
               threadId: null,
@@ -1545,11 +1639,31 @@ function tagValueCounts(key: string) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+/**
+ * Tags that genuinely vary from move to move. The facet card exists to show a
+ * distribution, so these are what keep it from being five identical 100% bars —
+ * and the staggered bars carry real information about the game.
+ */
+const PLY_FACETS: Record<string, (p: Ply) => string> = {
+  phase: p => p.phase,
+  piece: p => p.piece,
+  eval_band: p => p.evalBand,
+  time_pressure: p => p.timePressure,
+  color: p => p.color,
+  grade: p => p.grade,
+};
+
 const TAG_KEYS = [
+  'phase',
+  'piece',
+  'eval_band',
+  'grade',
   'result',
   'termination',
   'opening',
   'eco',
+  'color',
+  'time_pressure',
   'room',
   'time_control',
   'white',
@@ -1557,20 +1671,52 @@ const TAG_KEYS = [
   'blunders',
   'mistakes',
   'accuracy',
+  'annotation',
   'plies',
   'level',
-  'game.phase',
   'engine',
 ];
 
 function groupTags(game: Game, limit: number) {
-  return TAG_KEYS.filter(key => game.tags[key] !== undefined)
-    .slice(0, limit === 0 ? undefined : Math.max(limit, TAG_KEYS.length))
-    .map(key => groupTag(game, key));
+  const keys = TAG_KEYS.filter(
+    key => game.tags[key] !== undefined || key in PLY_FACETS
+  );
+  return keys.map(key => groupTag(game, key, limit));
 }
 
-function groupTag(game: Game, key: string) {
-  const value = game.tags[key]!;
+function groupTag(game: Game, key: string, limit = 0) {
+  const facet = PLY_FACETS[key];
+
+  if (facet) {
+    const counts = new Map<string, number>();
+    game.plies.forEach(p => {
+      const value = facet(p);
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    });
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const shown = limit > 0 ? sorted.slice(0, limit) : sorted;
+    return {
+      key,
+      name: key,
+      uniqueValues: sorted.length,
+      totalValues: game.plies.length,
+      topValues: shown.map(([value, count]) => ({
+        key,
+        name: value,
+        value,
+        count,
+        lastSeen: game.lastSeen,
+        firstSeen: game.firstSeen,
+        query: `${key}:"${value}"`,
+      })),
+    };
+  }
+
+  // Constant for the whole game — real Sentry has these too (`environment`).
+  const value = game.tags[key];
+  if (value === undefined) {
+    return {key, name: key, uniqueValues: 0, totalValues: 0, topValues: []};
+  }
   return {
     key,
     name: key,
@@ -1675,7 +1821,7 @@ function matchPositive(game: Game, token: string): boolean {
     const needle = token.replace(/^"|"$/g, '').toLowerCase();
     return (
       game.seed.title.toLowerCase().includes(needle) ||
-      game.seed.culprit.toLowerCase().includes(needle) ||
+      game.culprit.toLowerCase().includes(needle) ||
       game.shortId.toLowerCase().includes(needle) ||
       game.seed.errType.toLowerCase().includes(needle)
     );
@@ -1703,15 +1849,15 @@ function matchPositive(game: Game, token: string): boolean {
           case 'unassigned':
             return game.assignee === null;
           case 'for_review':
-            return seed.substatus === 'new' || seed.substatus === 'escalating';
-          case 'escalating':
-            return seed.substatus === 'escalating';
+            return substatusFor(game) === 'new' || substatusFor(game) === 'regressed';
+          case 'regressed':
+            return substatusFor(game) === 'regressed';
           case 'new':
-            return seed.substatus === 'new';
+            return substatusFor(game) === 'new';
           case 'ongoing':
-            return seed.substatus === 'ongoing';
+            return substatusFor(game) === 'ongoing';
           case 'unhandled':
-            return seed.level === 'fatal';
+            return game.isUnhandled;
           default:
             return true;
         }
@@ -1788,7 +1934,7 @@ function sortGames(games: Game[], sort: string | undefined): Game[] {
     case 'freq':
       return out.sort((a, b) => b.plies.length - a.plies.length);
     case 'user':
-      return out.sort((a, b) => b.seed.spectators - a.seed.spectators);
+      return out.sort((a, b) => b.spectators - a.spectators);
     case 'priority':
     case 'betterPriority':
     case 'trends':
@@ -1876,14 +2022,14 @@ const routes: ChessRoute[] = [
       return wanted.map(g => ({
         id: g.id,
         count: String(g.plies.length),
-        userCount: g.seed.spectators,
+        userCount: g.spectators,
         firstSeen: g.firstSeen,
         lastSeen: g.lastSeen,
         stats: g.stats,
         filtered: null,
         lifetime: {
           count: String(g.plies.length),
-          userCount: g.seed.spectators,
+          userCount: g.spectators,
           firstSeen: g.firstSeen,
           lastSeen: g.lastSeen,
           stats: g.stats,
@@ -1942,25 +2088,15 @@ const routes: ChessRoute[] = [
       if (!game) {
         return [];
       }
-      const value = game.tags[key];
-      return value === undefined
-        ? []
-        : [
-            {
-              id: '1',
-              key,
-              name: value,
-              value,
-              count: game.plies.length,
-              lastSeen: game.lastSeen,
-              firstSeen: game.firstSeen,
-              email: null,
-              username: null,
-              ipAddress: null,
-              identifier: null,
-              query: `${key}:"${value}"`,
-            },
-          ];
+      // Works for both per-ply facets and whole-game constants.
+      return groupTag(game, key).topValues.map((v, i) => ({
+        ...v,
+        id: String(i + 1),
+        email: null,
+        username: null,
+        ipAddress: null,
+        identifier: null,
+      }));
     },
   },
   {
@@ -2085,15 +2221,8 @@ const routes: ChessRoute[] = [
       );
     },
   },
-  {
-    method: 'GET',
-    url: /\/organizations\/[^/]+\/issues\/[^/]+\/autofix\/setup\/(\?.*)?$/,
-    handler: () => ({
-      genAIConsent: {ok: true},
-      integration: {ok: false, reason: null},
-      githubWriteIntegration: null,
-    }),
-  },
+  // autofix/setup is owned by domains/seer.tsx — do not add it here (a games
+  // route shadows seer's and its legacy shape breaks the Seer drawer quota check).
 
   // issue stream chrome
   {
@@ -2255,10 +2384,13 @@ const routes: ChessRoute[] = [
       const game = gameFromShortIdQuery(String(params.query ?? '')) ?? ALL_GAMES[0]!;
       const buckets = gameSeriesBuckets(game, params);
       const toSeries = (total: number) => {
-        const active = buckets.filter(b => b.inGame).length || 1;
-        const per = total / active;
+        // The chart total has to equal the header's "Events (total)" exactly —
+        // a period count that disagrees with the all-time count reads as a bug.
+        const active = buckets.filter(b => b.inGame);
+        const parts = distribute(total, active.length);
+        const counts = new Map(active.map((b, n) => [b.ts, parts[n] ?? 0]));
         return {
-          data: buckets.map(b => [b.ts, [{count: b.inGame ? Math.round(per) : 0}]]),
+          data: buckets.map(b => [b.ts, [{count: counts.get(b.ts) ?? 0}]]),
           order: 0,
           isMetricsData: false,
           start: buckets[0]!.ts,
@@ -2268,7 +2400,7 @@ const routes: ChessRoute[] = [
       };
       return {
         'count()': toSeries(game.plies.length),
-        'count_unique(user)': toSeries(game.seed.spectators),
+        'count_unique(user)': toSeries(game.spectators),
       };
     },
   },
@@ -2279,7 +2411,7 @@ const routes: ChessRoute[] = [
       const params = getParams(url, options);
       const game = gameFromShortIdQuery(String(params.query ?? '')) ?? ALL_GAMES[0]!;
       return {
-        data: [{'count_unique(user)': game.seed.spectators}],
+        data: [{'count_unique(user)': game.spectators}],
         meta: {fields: {'count_unique(user)': 'integer'}, units: {}},
       };
     },
@@ -2351,56 +2483,40 @@ function gameFromShortIdQuery(query: string): Game | undefined {
   return id ? BY_ID.get(id) : undefined;
 }
 
-const SAVED_VIEWS: any[] = [
-  {
-    id: '1',
-    name: 'Blunders',
-    query: 'is:unresolved blunders:>0',
-    querySort: 'date',
-    projects: [Number(PROJECT_ID)],
-    environments: [],
-    timeFilters: {start: null, end: null, period: '14d', utc: null},
-    lastVisited: null,
-    visibility: 'organization',
-    starred: true,
-    stars: 4,
-    createdBy: userFixture(USERS[0]!),
-    dateCreated: '2026-08-01',
-    dateUpdated: '2026-08-01',
-  },
-  {
-    id: '2',
-    name: 'Lost on time',
-    query: 'termination:timeout',
-    querySort: 'date',
-    projects: [Number(PROJECT_ID)],
-    environments: [],
-    timeFilters: {start: null, end: null, period: '14d', utc: null},
-    lastVisited: null,
-    visibility: 'organization',
-    starred: true,
-    stars: 2,
-    createdBy: userFixture(USERS[0]!),
-    dateCreated: '2026-08-02',
-    dateUpdated: '2026-08-02',
-  },
-  {
-    id: '3',
-    name: 'Clean games',
-    query: 'is:resolved accuracy:excellent',
-    querySort: 'new',
-    projects: [Number(PROJECT_ID)],
-    environments: [],
-    timeFilters: {start: null, end: null, period: '14d', utc: null},
-    lastVisited: null,
-    visibility: 'organization',
-    starred: true,
-    stars: 1,
-    createdBy: userFixture(USERS[0]!),
-    dateCreated: '2026-08-03',
-    dateUpdated: '2026-08-03',
-  },
+/**
+ * These mirror Sentry's real default views (Prioritized / For Review /
+ * Regressed / Assigned to me), which is what makes the shelf read as a
+ * workspace rather than a demo.
+ */
+const SAVED_VIEW_SEEDS: Array<[string, string, string, number]> = [
+  ['Worst blunders', 'is:unresolved blunders:>0', 'freq', 9],
+  ['Needs analysis', 'is:for_review', 'new', 6],
+  ['Same mistake again', 'is:regressed', 'date', 5],
+  ['Playing Black', 'is:unresolved color:black', 'date', 3],
+  ['Thrown away', 'is:unresolved result:0-1 blunders:>0', 'priority', 4],
+  ['Time scrambles', 'time_pressure:true', 'date', 2],
+  ['Lost on time', 'termination:timeout', 'date', 2],
+  ['Endgame technique', 'phase:endgame', 'date', 1],
+  ['Draws I should have won', 'result:1/2-1/2 blunders:>0', 'date', 3],
+  ['Clean games', 'is:resolved accuracy:excellent', 'new', 1],
 ];
+
+const SAVED_VIEWS: any[] = SAVED_VIEW_SEEDS.map(([name, query, sort, stars], i) => ({
+  id: String(i + 1),
+  name,
+  query,
+  querySort: sort,
+  projects: [Number(PROJECT_ID)],
+  environments: [],
+  timeFilters: {start: null, end: null, period: '14d', utc: null},
+  lastVisited: null,
+  visibility: 'organization',
+  starred: true,
+  stars,
+  createdBy: userFixture(USERS[0]!),
+  dateCreated: '2026-08-01',
+  dateUpdated: '2026-08-01',
+}));
 
 // eslint-disable-next-line @sentry/no-default-exports -- registry contract
 export default routes;

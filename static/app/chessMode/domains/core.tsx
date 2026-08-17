@@ -9,20 +9,67 @@
  * registry's empty-200 default and is logged as `[chessMode] UNMATCHED`.
  */
 import {
+  CHESS_ENVIRONMENTS,
   CHESS_ORG,
   CHESS_ORG_SLUG,
   CHESS_PROJECT,
+  CHESS_PROJECT_ID,
+  CHESS_PROJECT_SLUG,
   CHESS_PROJECTS,
+  CHESS_RELEASES,
   CHESS_TEAM,
   CHESS_USER,
 } from 'sentry/chessMode/fixtures';
 import type {ChessRoute} from 'sentry/chessMode/registry';
 
-const ENVIRONMENTS = [
-  {id: '1', name: 'blitz', displayName: 'blitz', isHidden: false},
-  {id: '2', name: 'rapid', displayName: 'rapid', isHidden: false},
-  {id: '3', name: 'classical', displayName: 'classical', isHidden: false},
-];
+const ENVIRONMENTS = CHESS_ENVIRONMENTS.map((name, i) => ({
+  id: String(i + 1),
+  name,
+  displayName: name,
+  isHidden: false,
+}));
+
+/**
+ * Releases are openings. Dates descend so the newest "release" is the opening
+ * most recently added to the repertoire.
+ */
+const RELEASES = CHESS_RELEASES.map((version, i) => {
+  const created = new Date(Date.now() - (i + 1) * 6 * 24 * 3600 * 1000).toISOString();
+
+  return {
+    id: String(i + 1),
+    version,
+    shortVersion: version,
+    versionInfo: {
+      package: 'repertoire',
+      version: {raw: version},
+      description: version,
+      buildHash: null,
+    },
+    ref: null,
+    url: null,
+    ...{dateCreated: created, dateReleased: created, firstEvent: created},
+    lastEvent: created,
+    newGroups: 4 - (i % 4),
+    commitCount: 3 + i,
+    authors: [],
+    lastCommit: null,
+    lastDeploy: null,
+    deployCount: 1,
+    status: 'open',
+    data: {},
+    projects: [
+      {
+        id: Number(CHESS_PROJECT_ID),
+        slug: CHESS_PROJECT_SLUG,
+        name: CHESS_PROJECT.name,
+        platform: CHESS_PROJECT.platform,
+        newGroups: 4 - (i % 4),
+        hasHealthData: false,
+      },
+    ],
+  };
+});
 
 const MEMBER = {
   id: '1',
@@ -230,7 +277,11 @@ const routes: ChessRoute[] = [
     handler: () => DETAILED_PROJECT,
   },
   {
-    url: /^\/organizations\/[^/]+\/(release-thresholds|releases)\//,
+    url: /^\/organizations\/[^/]+\/releases\//,
+    handler: () => RELEASES,
+  },
+  {
+    url: /^\/organizations\/[^/]+\/release-thresholds\//,
     handler: () => [],
   },
   {

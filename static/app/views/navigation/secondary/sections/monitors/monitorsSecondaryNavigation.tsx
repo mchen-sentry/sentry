@@ -11,7 +11,7 @@ export function MonitorsSecondaryNavigation() {
 
   return (
     <Fragment>
-      <SecondaryNavigation.Header>{t('Monitors')}</SecondaryNavigation.Header>
+      <SecondaryNavigation.Header>{t('Clocks')}</SecondaryNavigation.Header>
       <SecondaryNavigation.Body>
         <SecondaryNavigation.Section id="monitors-views">
           <SecondaryNavigation.List>

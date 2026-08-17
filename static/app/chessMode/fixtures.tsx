@@ -12,9 +12,29 @@ import type {Config} from 'sentry/types/system';
 
 export const CHESS_ORG_SLUG = 'pawn-patrol';
 export const CHESS_ORG_ID = '1';
-export const CHESS_PROJECT_SLUG = 'chess';
+// Sentry derives issue short-IDs from the project slug, so this has to be
+// `pawn-mortem` for the PAWN-MORTEM-N short-IDs to be believable.
+export const CHESS_PROJECT_SLUG = 'pawn-mortem';
 export const CHESS_PROJECT_ID = '11';
 export const CHESS_TEAM_SLUG = 'grandmasters';
+
+/**
+ * Environments are time controls. Slowest first, matching how Sentry orders
+ * prod/staging/dev by importance.
+ */
+export const CHESS_ENVIRONMENTS = ['classical', 'rapid', 'blitz', 'bullet'];
+
+/**
+ * Releases are openings. Sentry release "versions" are opaque strings, so
+ * ECO-code-prefixed names read exactly like a real versioning scheme.
+ */
+export const CHESS_RELEASES = [
+  'A88-dutch-leningrad',
+  'C50-italian-giuoco-piano',
+  'C67-ruy-lopez-berlin',
+  'D35-queens-gambit-declined',
+  'B01-scandinavian',
+];
 
 /**
  * Organization feature flags turned on for the demo. Add to this list if a
@@ -124,8 +144,11 @@ export const CHESS_TEAM: any = {
 export const CHESS_PROJECT: any = {
   id: CHESS_PROJECT_ID,
   slug: CHESS_PROJECT_SLUG,
-  name: 'Chess',
-  platform: 'javascript',
+  name: 'Pawn Mortem',
+  // `other` is not in the platformicons map, so it renders the neutral default
+  // chip. A `javascript` badge puts a bright yellow JS icon on the project
+  // chip and every starred view, which is the loudest thing on the screen.
+  platform: 'other',
   access: ['project:read', 'project:write', 'project:admin'],
   hasAccess: true,
   isMember: true,
@@ -134,10 +157,11 @@ export const CHESS_PROJECT: any = {
   isPublic: false,
   status: 'active',
   color: '#6c5fc7',
-  platforms: ['javascript'],
+  platforms: ['other'],
   team: CHESS_TEAM,
   teams: [CHESS_TEAM],
-  environments: ['blitz', 'rapid', 'classical'],
+  // Time controls map onto environments almost exactly.
+  environments: CHESS_ENVIRONMENTS,
   features: [],
   dateCreated: '2024-01-01T00:00:00.000Z',
   firstEvent: '2024-01-02T00:00:00.000Z',

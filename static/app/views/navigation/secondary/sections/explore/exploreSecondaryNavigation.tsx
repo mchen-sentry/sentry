@@ -121,7 +121,7 @@ export function ExploreSecondaryNavigation() {
                   to={`${baseUrl}/replays/`}
                   analyticsItemName="explore_replays"
                 >
-                  {t('Game Replays')}
+                  {t('Replays')}
                 </SecondaryNavigation.Link>
               </SecondaryNavigation.ListItem>
             </Feature>

@@ -15,11 +15,19 @@
  *
  * `url` is tested against the API path (with the `/api/0` prefix stripped, but
  * with the query string intact) *and* against the raw request url, so a regex
- * may be written either way.
+ * may be written either way. Anchor with `^` — an unanchored pattern can match
+ * mid-path and shadow another domain's route.
  *
- * `handler` returns the JSON body to respond with, or a `chessResponse(...)`
- * wrapper when a non-200 status or response headers (e.g. pagination `Link`)
- * are needed. It may be async.
+ * `handler(url, options)`:
+ * - `url` is that same API path, query string ATTACHED. There is no
+ *   `options.query` object — parse the query off the url yourself. Note the api
+ *   client serializes arrays with `qs` defaults, so a repeated param arrives as
+ *   `field[0]=x&field[1]=y`, not `field=x&field=y`.
+ * - `options` is `{method, data, url, headers, body}`, where `data` is the
+ *   already-parsed JSON request body for POST/PUT.
+ * - Return the JSON body to respond with, or a `chessResponse(...)` wrapper
+ *   when a non-200 status or response headers (e.g. pagination `Link`) are
+ *   needed. May be async.
  *
  * `method` is matched case-insensitively. Omit it to match any method.
  */
