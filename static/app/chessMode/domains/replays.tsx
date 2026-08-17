@@ -525,15 +525,24 @@ const routes: ChessRoute[] = [
     handler: () => [],
   },
   {
-    // "N replays" counts shown on issues.
-    // "N replays" badge on issues. The query carries the issue ids as
-    // `issue.id:[1,2,3]`; every finished game has exactly one recording.
+    /**
+     * Replay counts for issues. Deliberately empty.
+     *
+     * Reporting a count here looks harmless but opens a broken path: the
+     * issue header's "N Replays" badge links to the group-replays TAB, not to
+     * this domain's chessboard page. That tab auto-selects row 0 with no
+     * click (`SelectedReplayIndexProvider` defaults the index to 0) and mounts
+     * Sentry's real rrweb player, which then fails on our empty
+     * recording-segments and renders "Replay Not Found ... due to a processing
+     * error" above the table.
+     *
+     * Returning nothing keeps the badge hidden and leaves the tab on its
+     * honest "No replay data available." empty state. Restoring the link means
+     * taking over the group-replays route the way the detail route is taken
+     * over — not fabricating rrweb data.
+     */
     url: /\/organizations\/[^/]+\/replay-count\/(\?.*)?$/,
-    handler: url => {
-      const query = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('query');
-      const ids = query?.match(/\d+/g) ?? [];
-      return Object.fromEntries(ids.map(id => [id, 1]));
-    },
+    handler: () => ({}),
   },
   {
     // rrweb recording segments. Nothing to serve: the detail route is taken
