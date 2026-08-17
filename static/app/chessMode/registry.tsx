@@ -72,14 +72,17 @@ function domainPriority(key: string) {
   return key.includes('core') ? 1 : 0;
 }
 
-let cachedRoutes: ChessRoute[] | null = null;
+/** A route plus the domain file it came from, for debugging collisions. */
+type LoadedRoute = ChessRoute & {source: string};
 
-function getRoutes(): ChessRoute[] {
+let cachedRoutes: LoadedRoute[] | null = null;
+
+function getRoutes(): LoadedRoute[] {
   if (cachedRoutes) {
     return cachedRoutes;
   }
 
-  const routes: ChessRoute[] = [];
+  const routes: LoadedRoute[] = [];
   const keys = domainContext
     .keys()
     .sort((a, b) => domainPriority(a) - domainPriority(b) || a.localeCompare(b));
@@ -88,7 +91,7 @@ function getRoutes(): ChessRoute[] {
     try {
       const domain = domainContext(key) as {default?: ChessRoute[]};
       if (Array.isArray(domain?.default)) {
-        routes.push(...domain.default);
+        routes.push(...domain.default.map(route => ({...route, source: key})));
       } else {
         // eslint-disable-next-line no-console
         console.warn(`[chessMode] ${key} has no default-exported ChessRoute[]`);
@@ -186,6 +189,47 @@ type ChessFetchOptions = {
   body?: any;
   headers?: Headers;
   method?: string;
+};
+
+/**
+ * Devtools helper: see which domain file answers a url, and what it returns,
+ * without going through the app. In the browser console:
+ *
+ *   await __chessProbe('/organizations/pawn-patrol/issues/25/autofix/setup/')
+ *
+ * `source` is the domain file that won. Two domains can register overlapping
+ * patterns, and the earlier file silently wins — this is how you catch that.
+ */
+(window as any).__chessProbe = async (url: string, method = 'GET') => {
+  const apiPath = toApiPath(url);
+  const route = matchRoute(method.toUpperCase(), apiPath, url);
+  const response = await chessFetch(url, {method});
+
+  return {
+    matched: !!route,
+    source: route?.source ?? null,
+    pattern: route ? String(route.url) : null,
+    status: response.status,
+    body: await response.clone().json(),
+  };
+};
+
+/**
+ * Devtools helper: every route that could answer a url, in match order. If this
+ * returns more than one entry, only the first is reachable.
+ */
+(window as any).__chessWhoOwns = (url: string, method = 'GET') => {
+  const apiPath = toApiPath(url);
+  const upper = method.toUpperCase();
+
+  return getRoutes()
+    .filter(route => {
+      if (route.method && route.method.toUpperCase() !== upper) {
+        return false;
+      }
+      return route.url.test(apiPath) || route.url.test(url);
+    })
+    .map((route, i) => `${i === 0 ? 'WINS' : 'shadowed'}  ${route.source}  ${route.url}`);
 };
 
 /**

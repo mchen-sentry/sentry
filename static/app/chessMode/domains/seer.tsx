@@ -814,6 +814,25 @@ const routes: ChessRoute[] = [
     },
   },
   {
+    // Project-level Seer repo config (settings + the drawer's setup checks).
+    url: new RegExp(`^/projects/[^/]+/[^/]+/seer/repos/${QS}`),
+    handler: () => [
+      {
+        id: '1',
+        repositoryId: '1',
+        organizationId: '1',
+        name: 'repertoire',
+        owner: 'pawn-patrol',
+        provider: 'github',
+        externalId: '1',
+        integrationId: '1',
+        branchName: 'main',
+        branchOverrides: [],
+        instructions: '',
+      },
+    ],
+  },
+  {
     url: ORG_SEER('seer/setup-check'),
     handler: () => ({
       billing: {hasAutofixQuota: true, hasScannerQuota: true},

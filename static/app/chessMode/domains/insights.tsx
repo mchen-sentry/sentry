@@ -12,6 +12,7 @@
  * two extra "raw count" /events/ requests per chart for the confidence footer.
  */
 
+import {CHESS_PROJECT_ID} from 'sentry/chessMode/fixtures';
 import type {ChessRoute} from 'sentry/chessMode/registry';
 
 const DASHBOARD_ID = '1';
@@ -130,7 +131,9 @@ const DASHBOARD = {
   id: DASHBOARD_ID,
   title: DASHBOARD_TITLE,
   dateCreated: new Date(Date.now() - 30 * 86400 * 1000).toISOString(),
-  projects: [],
+  // Match the url's `?project=`, otherwise the filter bar reports the page
+  // filters as unsaved changes and shows Save/Cancel on first load.
+  projects: [Number(CHESS_PROJECT_ID)],
   environment: [],
   filters: {},
   permissions: {isEditableByEveryone: true},
@@ -146,7 +149,7 @@ const DASHBOARD_LIST_ITEM = {
     displayType: widget.displayType,
     layout: widget.layout,
   })),
-  projects: [],
+  projects: [Number(CHESS_PROJECT_ID)],
   environment: [],
   filters: {},
   dateCreated: DASHBOARD.dateCreated,

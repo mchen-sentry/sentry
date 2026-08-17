@@ -1203,16 +1203,40 @@ function buildActivity(game: Game) {
       user: userFixture(game.assignee ?? USERS[0]!),
     });
   }
-  if (game.assignee) {
+  // Notes render their own author, so they read correctly without the org
+  // member list an `assigned` entry would need to resolve.
+  if (game.seed.comments) {
     items.unshift({
-      id: `${game.id}-assigned`,
-      type: 'assigned',
-      data: {assignee: game.assignee.id, assigneeEmail: game.assignee.email},
+      id: `${game.id}-note`,
+      type: 'note',
+      data: {text: postGameRemark(game)},
       dateCreated: game.lastSeen,
-      user: userFixture(USERS[0]!),
+      user: userFixture(game.assignee ?? USERS[0]!),
     });
   }
   return items;
+}
+
+const REMARKS: Record<string, string> = {
+  blunder: 'Engine says this was winning two moves earlier. Look at the board.',
+  mistake: 'Not fatal, but you gave back everything you built in the opening.',
+  inaccuracy: 'Slightly off. The plan was fine, the move order was not.',
+  brilliant: 'Genuinely good. Do that on purpose next time.',
+  clean: 'Nothing to review here. Both players behaved themselves.',
+};
+
+function postGameRemark(game: Game) {
+  const c = game.counts;
+  const worst = c.blunder
+    ? 'blunder'
+    : c.mistake
+      ? 'mistake'
+      : c.inaccuracy
+        ? 'inaccuracy'
+        : c.brilliant
+          ? 'brilliant'
+          : 'clean';
+  return `${REMARKS[worst]} (${biggestSwing(game)} was the swing, room ${game.seed.room}.)`;
 }
 
 /** The PGN "source file": one ply per line, so stack frames get source context. */
@@ -2229,20 +2253,22 @@ const routes: ChessRoute[] = [
     handler: (url, options) => {
       const params = getParams(url, options);
       const game = gameFromShortIdQuery(String(params.query ?? '')) ?? ALL_GAMES[0]!;
-      const toSeries = (scale: number) => ({
-        data: game.stats['24h'].map(([ts, count]) => [
-          ts,
-          [{count: Math.max(0, Math.round(count * scale))}],
-        ]),
-        order: 0,
-        isMetricsData: false,
-        start: game.stats['24h'][0]![0],
-        end: game.stats['24h'][game.stats['24h'].length - 1]![0],
-        meta: {fields: {}, units: {}},
-      });
+      const buckets = gameSeriesBuckets(game, params);
+      const toSeries = (total: number) => {
+        const active = buckets.filter(b => b.inGame).length || 1;
+        const per = total / active;
+        return {
+          data: buckets.map(b => [b.ts, [{count: b.inGame ? Math.round(per) : 0}]]),
+          order: 0,
+          isMetricsData: false,
+          start: buckets[0]!.ts,
+          end: buckets[buckets.length - 1]!.ts,
+          meta: {fields: {}, units: {}},
+        };
+      };
       return {
-        'count()': toSeries(1),
-        'count_unique(user)': toSeries(0.2),
+        'count()': toSeries(game.plies.length),
+        'count_unique(user)': toSeries(game.seed.spectators),
       };
     },
   },
@@ -2259,6 +2285,62 @@ const routes: ChessRoute[] = [
     },
   },
 ];
+
+function durationSeconds(value: string, fallback: number) {
+  const match = /^(\d+)([smhdw])$/.exec(value ?? '');
+  if (!match) {
+    return fallback;
+  }
+  const unit = {s: 1, m: 60, h: 3600, d: 86400, w: 604800}[match[2]!]!;
+  return Number(match[1]) * unit;
+}
+
+/**
+ * Buckets covering the window the graph asked for, flagged with whether the
+ * game was actually being played during them. A game is a single burst of
+ * events, so at a daily interval it shows up as one bar.
+ */
+function gameSeriesBuckets(game: Game, params: Record<string, any>) {
+  const intervalSec = Math.max(
+    60,
+    durationSeconds(String(params.interval ?? '1h'), 3600)
+  );
+
+  // The default "Since First Seen" filter sends start/end instead of a period.
+  const explicitEnd = Date.parse(String(params.end ?? ''));
+  const explicitStart = Date.parse(String(params.start ?? ''));
+  const hasRange = !isNaN(explicitEnd) && !isNaN(explicitStart);
+
+  const periodSec = hasRange
+    ? (explicitEnd - explicitStart) / 1000
+    : durationSeconds(String(params.statsPeriod ?? '14d'), 14 * 86400);
+  const count = Math.min(Math.max(Math.ceil(periodSec / intervalSec), 2), 1000);
+
+  const endSec = hasRange ? Math.floor(explicitEnd / 1000) : Math.floor(NOW / 1000);
+  const startedSec = Math.floor(Date.parse(game.firstSeen) / 1000);
+  const endedSec = Math.floor(Date.parse(game.lastSeen) / 1000);
+
+  const buckets: Array<{inGame: boolean; ts: number}> = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const ts = endSec - i * intervalSec;
+    buckets.push({ts, inGame: ts + intervalSec > startedSec && ts <= endedSec});
+  }
+
+  // A game shorter than one bucket still deserves a bar — but only if it was
+  // played inside the requested window at all.
+  const windowStart = buckets[0]!.ts - intervalSec;
+  if (!buckets.some(b => b.inGame) && endedSec > windowStart && endedSec <= endSec) {
+    let nearest = buckets[0]!;
+    for (const b of buckets) {
+      if (Math.abs(b.ts - endedSec) < Math.abs(nearest.ts - endedSec)) {
+        nearest = b;
+      }
+    }
+    nearest.inGame = true;
+  }
+
+  return buckets;
+}
 
 function gameFromShortIdQuery(query: string): Game | undefined {
   const short = query.match(/issue:\s*([A-Za-z0-9-]+)/)?.[1];

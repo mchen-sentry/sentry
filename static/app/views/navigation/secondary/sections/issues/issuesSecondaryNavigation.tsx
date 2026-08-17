@@ -90,7 +90,7 @@ export function IssuesSecondaryNavigation() {
         {!hasProgressUi && (
           <Fragment>
             <SecondaryNavigation.Separator />
-            <SecondaryNavigation.Section id="issues-autofix" title={t('Autofix')}>
+            <SecondaryNavigation.Section id="issues-autofix" title={t('Game Reviews')}>
               <SecondaryNavigation.List>
                 <SecondaryNavigation.ListItem>
                   <SecondaryNavigation.Link
