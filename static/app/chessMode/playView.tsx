@@ -8,7 +8,7 @@ import {Input} from '@sentry/scraps/input';
 import {Container, Flex, Grid, Stack} from '@sentry/scraps/layout';
 import {Heading, Text} from '@sentry/scraps/text';
 
-import {PlayBoard} from 'sentry/chessMode/components/playBoard';
+import {PlayBoard, PLAY_BOARD_MAX_WIDTH} from 'sentry/chessMode/components/playBoard';
 import {
   formatClock,
   projectedTime,
@@ -23,6 +23,7 @@ import {t, tct} from 'sentry/locale';
 import {useLocation} from 'sentry/utils/useLocation';
 import {useNavigate} from 'sentry/utils/useNavigate';
 import {useOrganization} from 'sentry/utils/useOrganization';
+import {useUser} from 'sentry/utils/useUser';
 
 const NAME_STORAGE_KEY = 'pawn-patrol-player-name';
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -41,6 +42,19 @@ function readStoredName(): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * The name this player sits down under.
+ *
+ * Seeded from the signed-in user so an untouched field still sends a real name
+ * — a placeholder only *looks* filled in, and submitting one sends the empty
+ * string, which the server renders as "Guest player".
+ */
+function usePlayerName(): string {
+  const user = useUser();
+  const [stored] = useState(readStoredName);
+  return stored || user?.name || '';
 }
 
 function storeName(name: string) {
@@ -86,7 +100,8 @@ export default function PlayView() {
 function Lobby() {
   const navigate = useNavigate();
   const organization = useOrganization();
-  const [name, setName] = useState(readStoredName);
+  const defaultName = usePlayerName();
+  const [name, setName] = useState(defaultName);
   const [joinCode, setJoinCode] = useState('');
 
   const go = (code: string) => {
@@ -119,12 +134,7 @@ function Lobby() {
             <Text size="sm" bold>
               {t('Your name')}
             </Text>
-            <Input
-              value={name}
-              maxLength={24}
-              placeholder={t('Magnus Sentry')}
-              onChange={e => setName(e.target.value)}
-            />
+            <Input value={name} maxLength={24} onChange={e => setName(e.target.value)} />
           </Stack>
           <Flex>
             <Button variant="primary" onClick={() => go(generateRoomCode())}>
@@ -174,7 +184,7 @@ interface LiveTableProps {
 
 function LiveTable({room}: LiveTableProps) {
   const organization = useOrganization();
-  const [name] = useState(readStoredName);
+  const name = usePlayerName();
   const {state, seat, status, error, dismissError, move, resign, rematch, claimFlag} =
     useChessSocket({room, name});
 
@@ -201,7 +211,7 @@ function LiveTable({room}: LiveTableProps) {
     to: string;
   } | null>(null);
 
-  const turn = (chess?.turn() ?? 'w');
+  const turn = chess?.turn() ?? 'w';
   const myTurn = isPlayer && seat === turn && !state?.result;
 
   // Clear any selection when the position changes under us.
@@ -308,7 +318,7 @@ function LiveTable({room}: LiveTableProps) {
         gap="xl"
         align="start"
       >
-        <Stack gap="md" maxWidth="720px">
+        <Stack gap="md" maxWidth={`${PLAY_BOARD_MAX_WIDTH}px`}>
           <SeatRow
             color={topColor}
             state={state}
@@ -341,11 +351,13 @@ function LiveTable({room}: LiveTableProps) {
               <RoomCode>{room}</RoomCode>
               <InviteLink organization={organization.slug} room={room} />
               <Text size="sm" variant="muted">
-                {seat === 'spectator'
-                  ? t('Both seats are taken — you are watching.')
-                  : seat === 'w'
-                    ? t('You are playing White.')
-                    : t('You are playing Black.')}
+                {seat === null
+                  ? t('Taking a seat…')
+                  : seat === 'spectator'
+                    ? t('Both seats are taken — you are watching.')
+                    : seat === 'w'
+                      ? t('You are playing White.')
+                      : t('You are playing Black.')}
               </Text>
               <TurnLine
                 state={state}

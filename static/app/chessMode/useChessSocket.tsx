@@ -75,7 +75,10 @@ interface UseChessSocketOptions {
 
 export function useChessSocket({room, name}: UseChessSocketOptions) {
   const [state, setState] = useState<TableState | null>(null);
-  const [seat, setSeat] = useState<Seat>('spectator');
+  // Null until the server says which seat we got. Defaulting to 'spectator'
+  // told anyone whose connection was still pending — or never succeeded — that
+  // both seats were taken, on a table they had just opened themselves.
+  const [seat, setSeat] = useState<Seat | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 

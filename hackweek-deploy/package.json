@@ -1,0 +1,14 @@
+{
+  "name": "pawn-patrol-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.70.0",
+    "chess.js": "^1.4.0",
+    "ws": "^8.18.0"
+  }
+}

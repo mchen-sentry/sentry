@@ -18,6 +18,7 @@ import {
   CHESS_ORG_SLUG,
   CHESS_PROJECT_ID,
   CHESS_PROJECT_SLUG,
+  CHESS_RELEASES,
 } from 'sentry/chessMode/fixtures';
 import {type ChessRoute, chessResponse} from 'sentry/chessMode/registry';
 
@@ -1032,6 +1033,8 @@ function buildGame(seed: GameSeed, i: number) {
     opening: seed.opening,
     eco: seed.eco,
     room: seed.room,
+    // Environments are the four time controls (CHESS_ENVIRONMENTS).
+    environment: environmentFor(seed.timeControl),
     time_control: seed.timeControl,
     white: seed.white,
     black: seed.black,
@@ -1098,6 +1101,54 @@ function culpritFor(seed: GameSeed, ply: Ply) {
       : `${ply.phase}/${ply.piece}.ts`;
   return `${path} in move${moveNo}`;
 }
+
+/** Maps a time control onto one of CHESS_ENVIRONMENTS. */
+function environmentFor(timeControl: string) {
+  const baseMinutes = parseInt(timeControl.split('+')[0]!, 10) || 0;
+  if (baseMinutes < 3) {
+    return 'bullet';
+  }
+  if (baseMinutes < 10) {
+    return 'blitz';
+  }
+  return baseMinutes < 30 ? 'rapid' : 'classical';
+}
+
+/**
+ * Releases are openings. Only games whose ECO matches one of CHESS_RELEASES get
+ * one — like a real project where not every event carries a release.
+ */
+function releaseFor(eco: string) {
+  const version = CHESS_RELEASES.find(v => v.startsWith(`${eco}-`));
+  if (!version) {
+    return null;
+  }
+  return {
+    id: version,
+    version,
+    shortVersion: version,
+    versionInfo: {package: null, version: {raw: version}, description: version, buildHash: null},
+    ref: null,
+    url: null,
+    ...RELEASE_DATES,
+  };
+}
+
+const RELEASE_DATES = {
+  dateCreated: '2026-08-01T00:00:00.000Z',
+  dateReleased: '2026-08-01T00:00:00.000Z',
+  firstEvent: '2026-08-01T00:00:00.000Z',
+  lastEvent: '2026-08-17T00:00:00.000Z',
+  newGroups: 0,
+  commitCount: 0,
+  deployCount: 0,
+  authors: [],
+  lastCommit: null,
+  lastDeploy: null,
+  data: {},
+  projects: [],
+  status: 'open',
+};
 
 function accuracyBucket(acc: number) {
   if (acc >= 90) {
@@ -1759,12 +1810,20 @@ function tagValueRows(key: string) {
 
 // Query params / search
 
+/**
+ * Repeated params arrive in two shapes depending on the caller: `groups=1&
+ * groups=2` from a plain query string, and `groups[0]=1&groups[1]=2` from
+ * `qs.stringify`, which the issue stream uses. Collapse the indexed form back
+ * to the bare key so array params read the same either way.
+ */
 function parseQs(search: string): Record<string, any> {
   const out: Record<string, any> = {};
   const params = new URLSearchParams(search.replace(/^\?/, ''));
-  params.forEach((value, key) => {
-    if (key in out) {
-      out[key] = ([] as string[]).concat(out[key], value);
+  params.forEach((value, rawKey) => {
+    const indexed = /^(.+)\[\d*\]$/.exec(rawKey);
+    const key = indexed ? indexed[1]! : rawKey;
+    if (indexed || key in out) {
+      out[key] = ([] as string[]).concat(out[key] ?? [], value);
     } else {
       out[key] = value;
     }
@@ -2153,7 +2212,11 @@ const routes: ChessRoute[] = [
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/issues\/[^/]+\/first-last-release\/(\?.*)?$/,
-    handler: () => ({firstRelease: null, lastRelease: null}),
+    handler: url => {
+      const game = gameFromUrl(url);
+      const release = game ? releaseFor(game.seed.eco) : null;
+      return {firstRelease: release, lastRelease: release};
+    },
   },
   {
     method: 'GET',
