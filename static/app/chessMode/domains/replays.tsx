@@ -14,23 +14,18 @@
  *   urls              -> the room the game was played in
  */
 
-// Matches the registry contract in `sentry/chessMode/registry`. Declared
-// locally so this module has no import-time dependency on the registry.
-type ChessRoute = {
-  handler: (url: string, options: any) => any;
-  url: RegExp;
-  method?: string;
-};
+import {CHESS_PROJECT_ID} from 'sentry/chessMode/fixtures';
+import type {ChessRoute} from 'sentry/chessMode/registry';
 
 export type ChessGame = {
+  black: string;
+  /** Ply indices (0-based) that were blunders */
+  blunders: number[];
+  /** Seconds */
+  duration: number;
   /** ECO code, shown as the "browser version" */
   eco: string;
   id: string;
-  /** Ply indices (0-based) that were blunders */
-  blunders: number[];
-  black: string;
-  /** Seconds */
-  duration: number;
   /**
    * Space separated `SAN/fromto` tokens, e.g. `e4/e2e4 e5/e7e5`. Generated
    * from the real game score and verified by a legal-move parser, so the
@@ -40,12 +35,12 @@ export type ChessGame = {
   opening: string;
   result: '1-0' | '0-1' | '1/2-1/2';
   roomCode: string;
+  /** Minutes ago the game started */
+  startedMinutesAgo: number;
   /** How the game ended, shown under the board */
   termination: string;
   timeControl: string;
   white: string;
-  /** Minutes ago the game started */
-  startedMinutesAgo: number;
 };
 
 export const CHESS_GAMES: ChessGame[] = [
@@ -213,8 +208,13 @@ export function findGame(replayId: string): ChessGame | undefined {
   return CHESS_GAMES.find(game => game.id === replayId);
 }
 
-const PROJECT_ID = '2';
 const MINUTE = 60 * 1000;
+
+/** The org's environments are the time controls, and Bullet rides along with Blitz. */
+function environmentFor(timeControl: string) {
+  const lower = timeControl.toLowerCase();
+  return lower === 'bullet' ? 'blitz' : lower;
+}
 
 function toReplayRecord(game: ChessGame) {
   const startedAt = new Date(Date.now() - game.startedMinutesAgo * MINUTE);
@@ -223,7 +223,7 @@ function toReplayRecord(game: ChessGame) {
 
   return {
     id: game.id,
-    project_id: PROJECT_ID,
+    project_id: CHESS_PROJECT_ID,
     // The gag: "browser" is the opening, "os" is the time control.
     browser: {name: game.opening, version: game.eco},
     os: {name: game.timeControl, version: game.timeControl === 'Bullet' ? '1+0' : '10+0'},
@@ -257,7 +257,7 @@ function toReplayRecord(game: ChessGame) {
       `https://pawn-patrol.dev/room/${game.roomCode}/analysis`,
     ],
     releases: [`${game.opening.toLowerCase().replace(/[^a-z]+/g, '-')}@${game.eco}`],
-    environment: 'ranked',
+    environment: environmentFor(game.timeControl),
     dist: null,
     platform: 'javascript',
     replay_type: 'session',
@@ -277,9 +277,9 @@ function toReplayRecord(game: ChessGame) {
 
 const RECORDS = CHESS_GAMES.map(toReplayRecord);
 
-type Record_ = (typeof RECORDS)[number];
+type ReplayRecordShape = (typeof RECORDS)[number];
 
-const SORTERS: Record<string, (a: Record_, b: Record_) => number> = {
+const SORTERS: Record<string, (a: ReplayRecordShape, b: ReplayRecordShape) => number> = {
   started_at: (a, b) => Date.parse(a.started_at) - Date.parse(b.started_at),
   duration: (a, b) => a.duration - b.duration,
   count_errors: (a, b) => a.count_errors - b.count_errors,
@@ -290,12 +290,11 @@ const SORTERS: Record<string, (a: Record_, b: Record_) => number> = {
   'os.name': (a, b) => a.os.name.localeCompare(b.os.name),
 };
 
-function sortRecords(sort: unknown) {
-  const raw = typeof sort === 'string' && sort ? sort : '-started_at';
-  const desc = raw.startsWith('-');
-  const field = desc ? raw.slice(1) : raw;
+function sortRecords(sort = '-started_at') {
+  const desc = sort.startsWith('-');
+  const field = desc ? sort.slice(1) : sort;
   const sorter = SORTERS[field] ?? SORTERS.started_at!;
-  const sorted = [...RECORDS].sort(sorter);
+  const sorted = RECORDS.toSorted(sorter);
   return desc ? sorted.reverse() : sorted;
 }
 
@@ -303,12 +302,19 @@ function replayIdFromUrl(url: string) {
   return url.match(/\/replays\/([0-9a-zA-Z-]+)\//)?.[1] ?? '';
 }
 
+// The registry hands handlers the url with its query string attached, so
+// params are read off the url rather than a parsed query object.
+function sortFromUrl(url: string) {
+  const index = url.indexOf('?');
+  return index === -1 ? null : new URLSearchParams(url.slice(index + 1)).get('sort');
+}
+
 const routes: ChessRoute[] = [
   {
     // Replay index table.
     url: /\/organizations\/[^/]+\/replays\/(\?.*)?$/,
-    handler: (_url, options) => ({
-      data: sortRecords(options?.query?.sort),
+    handler: url => ({
+      data: sortRecords(sortFromUrl(url) || undefined),
       enabled: true,
     }),
   },
@@ -354,4 +360,5 @@ const routes: ChessRoute[] = [
   },
 ];
 
+// eslint-disable-next-line @sentry/no-default-exports -- registry contract
 export default routes;

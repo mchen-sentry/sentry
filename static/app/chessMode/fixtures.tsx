@@ -32,13 +32,20 @@ export const CHESS_ORG_FEATURES: string[] = [
   'insights-entry-points',
   'insights-initial-modules',
   'insights-addon-modules',
-  'visibility-explore-view',
   'gen-ai-features',
+  // Skips the "Finish Configuring Seer" setup wall in the issue sidebar.
+  'seer-added',
+  'autofix-pr-iteration-manual',
+  'autofix-seer-agent-debug',
   'issue-stream-custom-views',
   'user-feedback-ui',
   'dashboards-basic',
   'dashboards-edit',
 ];
+
+// Deliberately NOT enabled:
+// - `visibility-explore-view`: makes the dashboard filter bar fire extra
+//   /trace-items/attributes/ calls that nobody has stubbed (REPLAYS' request).
 
 export const CHESS_USER: any = {
   id: '1',

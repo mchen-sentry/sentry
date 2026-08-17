@@ -98,9 +98,7 @@ function userFixture(u: ChessUser) {
   };
 }
 
-// -----------------------------------------------------------------------------
 // Content: 25 games.
-// -----------------------------------------------------------------------------
 
 type Grade =
   | 'book'
@@ -257,7 +255,7 @@ const GAMES: GameSeed[] = [
     whiteElo: 812,
     blackElo: 934,
     whiteAcc: 99.1,
-    blackAcc: 41.0,
+    blackAcc: 41,
     result: '1-0',
     termination: 'checkmate',
     timeControl: '10+0',
@@ -414,7 +412,7 @@ const GAMES: GameSeed[] = [
     black: 'google_en_passant',
     whiteElo: 1301,
     blackElo: 1289,
-    whiteAcc: 76.0,
+    whiteAcc: 76,
     blackAcc: 70.4,
     result: '0-1',
     termination: 'resignation',
@@ -564,7 +562,7 @@ const GAMES: GameSeed[] = [
     black: 'safe_king_myth',
     whiteElo: 1615,
     blackElo: 1590,
-    whiteAcc: 88.0,
+    whiteAcc: 88,
     blackAcc: 55.4,
     result: '1-0',
     termination: 'checkmate',
@@ -594,7 +592,7 @@ const GAMES: GameSeed[] = [
     black: 'material_girl',
     whiteElo: 1820,
     blackElo: 1834,
-    whiteAcc: 91.0,
+    whiteAcc: 91,
     blackAcc: 90.2,
     result: '1/2-1/2',
     termination: 'insufficient material',
@@ -655,8 +653,8 @@ const GAMES: GameSeed[] = [
     black: 'wifi_woes',
     whiteElo: 1355,
     blackElo: 1361,
-    whiteAcc: 100.0,
-    blackAcc: 100.0,
+    whiteAcc: 100,
+    blackAcc: 100,
     result: '1-0',
     termination: 'abandonment',
     timeControl: '3+0',
@@ -746,7 +744,7 @@ const GAMES: GameSeed[] = [
     whiteElo: 2090,
     blackElo: 2115,
     whiteAcc: 85.5,
-    blackAcc: 83.0,
+    blackAcc: 83,
     result: '0-1',
     termination: 'forfeit',
     timeControl: '90+30',
@@ -897,7 +895,7 @@ const GAMES: GameSeed[] = [
     whiteElo: 1845,
     blackElo: 1811,
     whiteAcc: 79.2,
-    blackAcc: 85.0,
+    blackAcc: 85,
     result: '0-1',
     termination: 'resignation',
     timeControl: '3+0',
@@ -915,9 +913,7 @@ const GAMES: GameSeed[] = [
   },
 ];
 
-// -----------------------------------------------------------------------------
 // Derivation
-// -----------------------------------------------------------------------------
 
 const NOW = Date.now();
 
@@ -998,7 +994,7 @@ function buildGame(seed: GameSeed, i: number) {
 
   let evalScore = 0.2;
   const plies: Ply[] = sans.map((san, index) => {
-    const grade: Grade = seed.grades[index] ?? 'good';
+    const grade = seed.grades[index] ?? 'good';
     const swing =
       grade === 'blunder'
         ? -4.5
@@ -1107,13 +1103,11 @@ function buildStats(i: number, plies: number) {
   };
 }
 
-const ALL_GAMES: Game[] = GAMES.map(buildGame);
+const ALL_GAMES = GAMES.map(buildGame);
 const BY_ID = new Map(ALL_GAMES.map(g => [g.id, g]));
 const BY_SHORT_ID = new Map(ALL_GAMES.map(g => [g.shortId.toLowerCase(), g]));
 
-// -----------------------------------------------------------------------------
 // Group + event builders
-// -----------------------------------------------------------------------------
 
 function buildGroup(game: Game): any {
   const {seed} = game;
@@ -1366,7 +1360,7 @@ function buildEvent(game: Game, eventId?: string): any {
 
   return {
     id: game.eventId,
-    eventID: eventId && eventId.length === 32 ? eventId : game.eventId,
+    eventID: eventId?.length === 32 ? eventId : game.eventId,
     groupID: game.id,
     projectID: PROJECT_ID,
     title: seed.title,
@@ -1513,9 +1507,7 @@ function biggestSwing(game: Game) {
   return `${worst.label} (${worst.delta.toFixed(2)})`;
 }
 
-// -----------------------------------------------------------------------------
 // Tags
-// -----------------------------------------------------------------------------
 
 /** Distinct values for a tag key across every game, most common first. */
 function tagValueCounts(key: string) {
@@ -1591,9 +1583,7 @@ function tagValueRows(key: string) {
   }));
 }
 
-// -----------------------------------------------------------------------------
 // Query params / search
-// -----------------------------------------------------------------------------
 
 function parseQs(search: string): Record<string, any> {
   const out: Record<string, any> = {};
@@ -1623,7 +1613,7 @@ function getParams(url: string, options: any): Record<string, any> {
       : data && typeof data === 'object' && (options?.method ?? 'GET') === 'GET'
         ? data
         : {};
-  return {...fromUrl, ...fromData, ...(query ?? {})};
+  return {...fromUrl, ...fromData, ...query};
 }
 
 function asArray(value: any): string[] {
@@ -1793,24 +1783,12 @@ function sortGames(games: Game[], sort: string | undefined): Game[] {
 }
 
 /**
- * The issue stream reads `X-Hits`, `X-Max-Hits` and `Link` off the response, so
- * the body carries them as a non-enumerable property for the interceptor in
- * `chessMode/registry.tsx` to lift into the fake xhr. If the interceptor ignores
- * it the body is still a plain array, so the stream degrades to "no pagination"
- * instead of breaking.
+ * The issue stream reads `X-Hits`, `X-Max-Hits` and `Link` off the response
+ * rather than the body, so those endpoints answer with the registry's
+ * `chessResponse` wrapper.
  */
-function withHeaders<T>(body: T, headers: Record<string, string>): T {
-  try {
-    Object.defineProperty(body as any, '__chessHeaders', {
-      value: headers,
-      enumerable: false,
-      configurable: true,
-      writable: true,
-    });
-  } catch {
-    // frozen body — pagination headers are optional
-  }
-  return body;
+function withHeaders(body: any, headers: Record<string, string>) {
+  return chessResponse(body, {headers});
 }
 
 function linkHeader(path: string, hasPrev: boolean, hasNext: boolean) {
@@ -1830,22 +1808,10 @@ function gameFromUrl(url: string): Game | undefined {
   return BY_ID.get(key) ?? BY_SHORT_ID.get(key.toLowerCase());
 }
 
-function isIssueScoped(params: Record<string, any>) {
-  const referrer = String(params.referrer ?? '');
-  const query = String(params.query ?? '');
-  return (
-    referrer.startsWith('issue_details') ||
-    referrer.startsWith('issue-details') ||
-    /\bissue(\.id)?:/.test(query)
-  );
-}
-
-// -----------------------------------------------------------------------------
 // Routes
-// -----------------------------------------------------------------------------
 
 const routes: ChessRoute[] = [
-  // --- issue stream -------------------------------------------------------
+  // issue stream
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/issues\/(\?.*)?$/,
@@ -1915,7 +1881,7 @@ const routes: ChessRoute[] = [
     },
   },
 
-  // --- issue detail -------------------------------------------------------
+  // issue detail
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/issues\/[^/]+\/(\?.*)?$/,
@@ -1942,7 +1908,7 @@ const routes: ChessRoute[] = [
     },
   },
 
-  // --- tags ---------------------------------------------------------------
+  // tags
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/issues\/[^/]+\/tags\/([^/?]+)\/values\/(\?.*)?$/,
@@ -1996,7 +1962,7 @@ const routes: ChessRoute[] = [
     },
   },
 
-  // --- issue detail extras (empty but well-shaped) -------------------------
+  // issue detail extras (empty but well-shaped)
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/issues\/[^/]+\/activities\/(\?.*)?$/,
@@ -2105,7 +2071,7 @@ const routes: ChessRoute[] = [
     }),
   },
 
-  // --- issue stream chrome -------------------------------------------------
+  // issue stream chrome
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/group-search-views\/starred\/(\?.*)?$/,
@@ -2165,12 +2131,35 @@ const routes: ChessRoute[] = [
     handler: () => ({owners: [], rules: [], rule: null}),
   },
   {
+    // `useActionableItemsWithProguardErrors` spreads `.errors`, so an array
+    // response (the registry's default) would throw.
+    method: 'GET',
+    url: /\/projects\/[^/]+\/[^/]+\/events\/[^/]+\/actionable-items\/(\?.*)?$/,
+    handler: () => ({errors: []}),
+  },
+  {
+    method: 'GET',
+    url: /\/projects\/[^/]+\/[^/]+\/events\/[^/]+\/committers\/(\?.*)?$/,
+    handler: () => ({committers: []}),
+  },
+  {
+    // No repo behind game.pgn, so every frame reports "not configured".
+    method: 'GET',
+    url: /\/projects\/[^/]+\/[^/]+\/stacktrace-link\/(\?.*)?$/,
+    handler: () => ({config: null, sourceUrl: null, integrations: []}),
+  },
+  {
+    method: 'GET',
+    url: /\/organizations\/[^/]+\/sentry-app-components\/(\?.*)?$/,
+    handler: () => [],
+  },
+  {
     method: 'GET',
     url: /\/organizations\/[^/]+\/issues\/[^/]+\/events\/[^/]+\/committers\/(\?.*)?$/,
     handler: () => ({committers: []}),
   },
 
-  // --- search bar tag autocomplete ----------------------------------------
+  // search bar tag autocomplete
   {
     method: 'GET',
     url: /\/organizations\/[^/]+\/tags\/([^/?]+)\/values\/(\?.*)?$/,
@@ -2195,18 +2184,18 @@ const routes: ChessRoute[] = [
     },
   },
 
-  // --- mutations: echo enough for the optimistic UI to settle -------------
+  // mutations: echo enough for the optimistic UI to settle
   {
     method: 'PUT',
     url: /\/organizations\/[^/]+\/issues\/(\?.*)?$/,
-    handler: (_url, options) => ({...(options?.data ?? {})}),
+    handler: (_url, options) => ({...options?.data}),
   },
   {
     method: 'PUT',
     url: /\/organizations\/[^/]+\/issues\/[^/]+\/(\?.*)?$/,
     handler: (url, options) => {
       const game = gameFromUrl(url);
-      return {...(game ? buildGroup(game) : {}), ...(options?.data ?? {})};
+      return {...(game ? buildGroup(game) : {}), ...options?.data};
     },
   },
   {
@@ -2217,7 +2206,7 @@ const routes: ChessRoute[] = [
   {
     method: 'PUT',
     url: /\/projects\/[^/]+\/[^/]+\/issues\/(\?.*)?$/,
-    handler: (_url, options) => ({...(options?.data ?? {})}),
+    handler: (_url, options) => ({...options?.data}),
   },
   {
     method: 'POST',
@@ -2231,17 +2220,14 @@ const routes: ChessRoute[] = [
     }),
   },
 
-  // --- issue-details charts ------------------------------------------------
-  // These paths are shared with Insights (owned by REPLAYS). Only answer when
-  // the request is clearly scoped to an issue; otherwise fall through.
+  // Issue-details charts. `/events-stats/` and `/events/` are also Insights
+  // endpoints, so these patterns deliberately require the issue-details
+  // referrer — anything else falls through to the Insights domain.
   {
     method: 'GET',
-    url: /\/organizations\/[^/]+\/events-stats\/(\?.*)?$/,
+    url: /\/organizations\/[^/]+\/events-stats\/\?[^#]*referrer=issue[_-]details/,
     handler: (url, options) => {
       const params = getParams(url, options);
-      if (!isIssueScoped(params)) {
-        return undefined;
-      }
       const game = gameFromShortIdQuery(String(params.query ?? '')) ?? ALL_GAMES[0]!;
       const toSeries = (scale: number) => ({
         data: game.stats['24h'].map(([ts, count]) => [
@@ -2262,12 +2248,9 @@ const routes: ChessRoute[] = [
   },
   {
     method: 'GET',
-    url: /\/organizations\/[^/]+\/events\/(\?.*)?$/,
+    url: /\/organizations\/[^/]+\/events\/\?[^#]*referrer=issue[_-]details/,
     handler: (url, options) => {
       const params = getParams(url, options);
-      if (!isIssueScoped(params)) {
-        return undefined;
-      }
       const game = gameFromShortIdQuery(String(params.query ?? '')) ?? ALL_GAMES[0]!;
       return {
         data: [{'count_unique(user)': game.seed.spectators}],
@@ -2337,4 +2320,6 @@ const SAVED_VIEWS: any[] = [
   },
 ];
 
+// eslint-disable-next-line @sentry/no-default-exports -- registry contract
 export default routes;
+

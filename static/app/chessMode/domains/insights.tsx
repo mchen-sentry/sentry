@@ -12,13 +12,7 @@
  * two extra "raw count" /events/ requests per chart for the confidence footer.
  */
 
-// Matches the registry contract in `sentry/chessMode/registry`. Declared
-// locally so this module has no import-time dependency on the registry.
-type ChessRoute = {
-  handler: (url: string, options: any) => any;
-  url: RegExp;
-  method?: string;
-};
+import type {ChessRoute} from 'sentry/chessMode/registry';
 
 const DASHBOARD_ID = '1';
 const DASHBOARD_TITLE = 'Pawn Patrol Overview';
@@ -301,19 +295,28 @@ function tableResponse(fields: string[]) {
   return {data: [row], meta: {fields: meta, units: {}}};
 }
 
+// -- query parsing -----------------------------------------------------------
+
+// The registry hands handlers the url with its query string attached, and the
+// api client serializes arrays with `qs` defaults (`field[0]=`, `field[1]=`),
+// so repeated params have to be collected by prefix rather than by exact name.
+
+function queryParams(url: string) {
+  const index = url.indexOf('?');
+  return new URLSearchParams(index === -1 ? '' : url.slice(index + 1));
+}
+
+function listParam(params: URLSearchParams, key: string): string[] {
+  const values: string[] = [];
+  params.forEach((value, name) => {
+    if (name === key || name.startsWith(`${key}[`)) {
+      values.push(value);
+    }
+  });
+  return values;
+}
+
 // -- routes ------------------------------------------------------------------
-
-function isDashboardRequest(options: any) {
-  const referrer = options?.query?.referrer;
-  return typeof referrer === 'string' && referrer.startsWith('api.dashboards');
-}
-
-function toList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map(String);
-  }
-  return typeof value === 'string' && value ? [value] : [];
-}
 
 const routes: ChessRoute[] = [
   {
@@ -333,36 +336,35 @@ const routes: ChessRoute[] = [
     handler: () => DASHBOARD,
   },
   {
-    // Chart data for every widget on the dashboard.
+    // Chart data for every widget on the dashboard. The widget's `conditions`
+    // string arrives as the `query` param, which is how the two charts are
+    // told apart.
     url: /\/organizations\/[^/]+\/events-stats\/(\?.*)?$/,
-    handler: (_url, options) => {
-      const conditions = String(options?.query?.query ?? '');
-      return conditions.includes('blunder')
-        ? makeSeries(options?.query, {base: 34, swing: 22})
-        : makeSeries(options?.query, {base: 96, swing: 40});
+    handler: url => {
+      const params = queryParams(url);
+      const shape = params.get('query')?.includes('blunder')
+        ? {base: 34, swing: 22}
+        : {base: 96, swing: 40};
+      return makeSeries(
+        {interval: params.get('interval'), statsPeriod: params.get('statsPeriod')},
+        shape
+      );
     },
   },
   {
     // Table + big_number widget data.
     url: /\/organizations\/[^/]+\/events\/(\?.*)?$/,
-    handler: (_url, options) => {
-      if (!isDashboardRequest(options)) {
-        // Leave non-dashboard Discover traffic to whoever else claims it; an
-        // empty result is a safe answer rather than chess-shaped nonsense.
+    handler: url => {
+      const params = queryParams(url);
+      if (!params.get('referrer')?.startsWith('api.dashboards')) {
+        // Leave non-dashboard Discover traffic alone; an empty result is a
+        // safer answer than chess-shaped nonsense in someone else's table.
         return {data: [], meta: {fields: {}, units: {}}};
       }
-      return tableResponse(toList(options?.query?.field));
+      return tableResponse(listParam(params, 'field'));
     },
-  },
-  {
-    // Dashboard filter bar chrome.
-    url: /\/organizations\/[^/]+\/releases\/(\?.*)?$/,
-    handler: () => [],
-  },
-  {
-    url: /\/organizations\/[^/]+\/tags\/(\?.*)?$/,
-    handler: () => [],
   },
 ];
 
+// eslint-disable-next-line @sentry/no-default-exports -- registry contract
 export default routes;

@@ -166,8 +166,8 @@ function EmptyResult({emptyMessage, query}: EmptyResultProps) {
   if (query === DEFAULT_QUERY) {
     return (
       <NoUnresolvedIssues
-        title={t("We couldn't find any issues that matched your filters.")}
-        subtitle={t('Get out there and write some broken code!')}
+        title={t("We couldn't find any games that matched your filters.")}
+        subtitle={t('Get out there and hang some pieces!')}
       />
     );
   }
@@ -177,7 +177,7 @@ function EmptyResult({emptyMessage, query}: EmptyResultProps) {
       <NoUnresolvedIssues
         title={t('Well, would you look at that.')}
         subtitle={t(
-          'No more issues to review. Better get back out there and write some broken code.'
+          'No more games to review. Better get back out there and blunder something.'
         )}
       />
     );

@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import styled from '@emotion/styled';
 
 import {Button, ButtonBar} from '@sentry/scraps/button';
@@ -20,7 +20,6 @@ import {IconRefresh} from 'sentry/icons/iconRefresh';
 import {t} from 'sentry/locale';
 import {useOrganization} from 'sentry/utils/useOrganization';
 import {useParams} from 'sentry/utils/useParams';
-import type {ChessGame} from 'sentry/chessMode/domains/replays';
 import {CHESS_GAMES, findGame} from 'sentry/chessMode/domains/replays';
 
 /**
@@ -34,13 +33,11 @@ import {CHESS_GAMES, findGame} from 'sentry/chessMode/domains/replays';
 
 const FILES = 'abcdefgh';
 
+/**
+ * Both colours use the solid ("black") glyphs and are told apart by fill. The
+ * hollow white glyphs wash out against a coloured square.
+ */
 const PIECE_GLYPH: Record<string, string> = {
-  K: '♔',
-  Q: '♕',
-  R: '♖',
-  B: '♗',
-  N: '♘',
-  P: '♙',
   k: '♚',
   q: '♛',
   r: '♜',
@@ -66,7 +63,7 @@ function squareIndex(name: string) {
 }
 
 function startingBoard() {
-  const board = new Array<string>(64).fill('.');
+  const board = Array.from({length: 64}, () => '.');
   const back = 'rnbqkbnr';
   for (let i = 0; i < 8; i++) {
     board[i] = back[i]!;
@@ -173,7 +170,9 @@ function ChessBoard({
             {file === (flipped ? 7 : 0) ? <RankLabel>{8 - rank}</RankLabel> : null}
             {rank === (flipped ? 0 : 7) ? <FileLabel>{FILES[file]}</FileLabel> : null}
             {piece === '.' ? null : (
-              <Piece isWhite={piece === piece.toUpperCase()}>{PIECE_GLYPH[piece]}</Piece>
+              <Piece isWhite={piece === piece.toUpperCase()}>
+                {PIECE_GLYPH[piece.toLowerCase()]}
+              </Piece>
             )}
           </Square>
         );
@@ -230,7 +229,7 @@ function MoveList({
 export default function ChessReplayDetail() {
   const organization = useOrganization();
   const {replaySlug} = useParams<{replaySlug: string}>();
-  const game: ChessGame = findGame(replaySlug ?? '') ?? CHESS_GAMES[0]!;
+  const game = findGame(replaySlug ?? '') ?? CHESS_GAMES[0]!;
 
   const plies = useMemo(() => parseMoves(game.moves), [game.moves]);
   const positions = useMemo(() => buildPositions(plies), [plies]);
@@ -248,7 +247,7 @@ export default function ChessReplayDetail() {
 
   useEffect(() => {
     if (!playing) {
-      return undefined;
+      return () => {};
     }
     const timer = window.setInterval(() => {
       setPly(current => {
@@ -262,22 +261,19 @@ export default function ChessReplayDetail() {
     return () => window.clearInterval(timer);
   }, [playing, speed, plies.length]);
 
-  const step = useCallback(
-    (delta: number) => {
-      setPlaying(false);
-      setPly(current => Math.max(0, Math.min(plies.length, current + delta)));
-    },
-    [plies.length]
-  );
+  function step(delta: number) {
+    setPlaying(false);
+    setPly(current => Math.max(0, Math.min(plies.length, current + delta)));
+  }
 
-  const togglePlay = useCallback(() => {
+  function togglePlay() {
     setPlaying(current => {
       if (!current && ply >= plies.length) {
         setPly(0);
       }
       return !current;
     });
-  }, [ply, plies.length]);
+  }
 
   const board = positions[ply]!;
   const lastPly = ply > 0 ? plies[ply - 1] : undefined;
@@ -335,7 +331,7 @@ export default function ChessReplayDetail() {
               </Flex>
             </PanelHeader>
             <PanelBody>
-              <Flex direction="column" align="center" gap="md" padding="lg">
+              <Stack align="center" gap="md" padding="lg">
                 <BoardRow>
                   <EvalBar
                     aria-label={t('Material balance')}
@@ -349,7 +345,7 @@ export default function ChessReplayDetail() {
                   </BoardFrame>
                 </BoardRow>
 
-                <Flex direction="column" gap="sm" width="100%" maxWidth="640px">
+                <Stack gap="sm" width="100%" maxWidth="460px">
                   <Flex justify="between" align="center">
                     <Text size="sm" variant="muted" monospace>
                       {lastPly
@@ -416,8 +412,8 @@ export default function ChessReplayDetail() {
                       ))}
                     </ButtonBar>
                   </Flex>
-                </Flex>
-              </Flex>
+                </Stack>
+              </Stack>
             </PanelBody>
           </Panel>
 
@@ -498,7 +494,7 @@ const BoardRow = styled('div')`
   align-items: stretch;
   gap: ${p => p.theme.space.md};
   width: 100%;
-  max-width: 640px;
+  max-width: 460px;
 `;
 
 const EvalBar = styled('div')<{whiteShare: number}>`
@@ -538,22 +534,20 @@ const Square = styled('div')<{isDark: boolean; highlight?: 'move'}>`
     p.isDark
       ? p.theme.tokens.graphics.accent.muted
       : p.theme.tokens.background.secondary};
-  box-shadow: ${p =>
-    p.highlight === 'move'
-      ? `inset 0 0 0 3px ${p.theme.tokens.border.warning.vibrant}`
-      : 'none'};
+  box-sizing: border-box;
+  border: 3px solid
+    ${p =>
+      p.highlight === 'move' ? p.theme.tokens.border.warning.vibrant : 'transparent'};
 `;
 
 const Piece = styled('span')<{isWhite: boolean}>`
-  font-size: clamp(18px, 5.5cqw, 44px);
+  font-size: 38px;
   line-height: 1;
   user-select: none;
   color: ${p =>
     p.isWhite ? p.theme.tokens.content.onVibrant.light : p.theme.tokens.content.onVibrant.dark};
-  text-shadow: ${p =>
-    p.isWhite
-      ? '0 0 1px #000, 0 0 2px rgba(0, 0, 0, 0.55)'
-      : '0 0 1px rgba(255, 255, 255, 0.5)'};
+  -webkit-text-stroke: 1px
+    ${p => (p.isWhite ? 'rgba(0, 0, 0, 0.75)' : 'rgba(255, 255, 255, 0.65)')};
 `;
 
 const RankLabel = styled('span')`
