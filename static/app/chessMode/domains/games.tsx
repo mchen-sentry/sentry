@@ -231,15 +231,17 @@ const GAMES: GameSeed[] = [
     hasSeen: true,
   },
   {
+    // Paired with the SCH0LR replay — the move order is C50 (Bc4 before Qh5),
+    // so matching their ECO is also the more correct label.
     title: "Scholar's Mate in 4 — again",
     level: 'error',
     priority: 'high',
     status: 'unresolved',
-    room: 'SCH00L',
-    eco: 'C23',
-    opening: "Bishop's Opening, Scholar's Mate line",
-    white: 'four_move_freddy',
-    black: 'trusting_tina',
+    room: 'SCH0LR',
+    eco: 'C50',
+    opening: "Italian Game, Scholar's Mate",
+    white: 'queen.mate',
+    black: 'pawn.stark',
     whiteElo: 812,
     blackElo: 934,
     whiteAcc: 99.1,
@@ -249,7 +251,7 @@ const GAMES: GameSeed[] = [
     timeControl: '10+0',
     finalFen: 'r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4',
     moves: 'e4 e5 Bc4 Nc6 Qh5 Nf6 Qxf7#',
-    grades: {4: 'inaccuracy', 5: 'blunder', 6: 'best'},
+    grades: {4: 'mistake', 5: 'blunder', 6: 'best'},
     errType: 'Checkmate',
     errValue: 'f7 defended only by the king; Qxf7# unstoppable',
     hoursAgo: 51,
@@ -781,15 +783,17 @@ const GAMES: GameSeed[] = [
     hasSeen: true,
   },
   {
-    title: 'Smothered mate: Nf7# with everything defended',
+    // Paired with the L3G4LT replay: same opening, players, result, ply count
+    // and annotation counts, so the click-through is genuinely the same game.
+    title: "Légal's Trap: took the queen, got mated in three",
     level: 'info',
     priority: 'low',
     status: 'resolved',
-    room: 'SM0TH3',
+    room: 'L3G4LT',
     eco: 'C41',
     opening: 'Philidor Defense, Lion Variation',
-    white: 'philidor_fan',
-    black: 'boxed_in_bruno',
+    white: 'bishop.byte',
+    black: 'pawn.stark',
     whiteElo: 1580,
     blackElo: 1544,
     whiteAcc: 95.7,
@@ -797,11 +801,11 @@ const GAMES: GameSeed[] = [
     result: '1-0',
     termination: 'checkmate',
     timeControl: '10+0',
-    finalFen: 'r1bqkb1r/pppp1Npp/2n5/8/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 0 6',
+    finalFen: 'r2q1bnr/ppp1kBpp/2np3p/3NN3/4P3/8/PPPP1PPP/R1B1K2R b KQ - 3 7',
     moves: 'e4 e5 Nf3 d6 Bc4 Bg4 Nc3 h6 Nxe5 Bxd1 Bxf7+ Ke7 Nd5#',
-    grades: {4: 'inaccuracy', 5: 'mistake', 9: 'blunder', 10: 'brilliant', 12: 'best'},
-    errType: 'SmotheredMate',
-    errValue: 'King boxed by its own pieces; Nd5# with 0 escape squares',
+    grades: {5: 'mistake', 9: 'blunder', 10: 'brilliant', 12: 'best'},
+    errType: 'QueenGrab',
+    errValue: 'Bxd1?? accepts the queen; Nd5# follows with no escape squares',
     hoursAgo: 20,
     assignee: 1,
     hasSeen: true,
@@ -1621,6 +1625,12 @@ function buildEvent(game: Game, eventId?: string): any {
         increment: `${seed.timeControl.split('+')[1] ?? '0'}s`,
         flagged: seed.termination === 'timeout',
       },
+      // Deliberately no `replay` context. Setting contexts.replay.replay_id
+      // mounts Sentry's real rrweb player inline, which has no recording
+      // segments to play here and renders "replay not found due to a
+      // processing error". The header's "1 Replay" badge comes from the
+      // replay-count route instead and links to the chessboard replay, which
+      // is the working path.
     },
     entries: [
       {
