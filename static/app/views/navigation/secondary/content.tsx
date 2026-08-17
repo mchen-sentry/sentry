@@ -1,5 +1,6 @@
-import type {ReactNode} from 'react';
+import {Fragment, type ReactNode} from 'react';
 
+import {BlunderQuotaNag} from 'sentry/chessMode/quotaNag';
 import {unreachable} from 'sentry/utils/unreachable';
 import {useOrganization} from 'sentry/utils/useOrganization';
 import {usePrimaryNavigation} from 'sentry/views/navigation/primaryNavigationContext';
@@ -13,6 +14,22 @@ import {ProjectsSecondaryNavigation} from 'sentry/views/navigation/secondary/sec
 import {SettingsSecondaryNavigation} from 'sentry/views/navigation/secondary/sections/settings/settingsSecondaryNavigation';
 
 export function SecondaryNavigationContent(): ReactNode {
+  const section = useSecondaryNavigationSection();
+  if (section === null) {
+    return null;
+  }
+
+  // The sidebar grid is `auto 1fr auto`; the section supplies the header and
+  // body, and the plan nag takes the otherwise-unused footer row.
+  return (
+    <Fragment>
+      {section}
+      <BlunderQuotaNag />
+    </Fragment>
+  );
+}
+
+function useSecondaryNavigationSection(): ReactNode {
   const {activeGroup} = usePrimaryNavigation();
   const organization = useOrganization();
   switch (activeGroup) {

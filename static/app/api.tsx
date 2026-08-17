@@ -4,6 +4,7 @@ import * as qs from 'query-string';
 
 import {redirectToProject} from 'sentry/actionCreators/redirectToProject';
 import {openSudo} from 'sentry/actionCreators/sudoModal';
+import {CHESS_MODE_ENABLED, chessFetch} from 'sentry/chessMode/registry';
 import {EXPERIMENTAL_SPA} from 'sentry/constants';
 import {
   PROJECT_MOVED,
@@ -472,13 +473,17 @@ export class Client {
       requestHeaders.set('X-CSRFToken', getCsrfToken());
     }
 
-    const fetchRequest = fetch(fullUrl, {
-      method,
-      body,
-      headers: requestHeaders,
-      credentials: this.credentials,
-      signal: aborter?.signal,
-    });
+    // Pawn Patrol: with no backend, every request is served by the chess-mode
+    // registry instead of the network.
+    const fetchRequest = CHESS_MODE_ENABLED
+      ? chessFetch(fullUrl, {method, body, headers: requestHeaders})
+      : fetch(fullUrl, {
+          method,
+          body,
+          headers: requestHeaders,
+          credentials: this.credentials,
+          signal: aborter?.signal,
+        });
 
     // XXX(epurkhiser): We migrated off of jquery, so for now we have a
     // compatibility layer which mimics that of the jquery response objects.

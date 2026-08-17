@@ -4,13 +4,14 @@ import {useTheme} from '@emotion/react';
 import styled from '@emotion/styled';
 import type {LocationDescriptor} from 'history';
 import invariant from 'invariant';
-import {PlatformIcon} from 'platformicons';
 
+import {Tag} from '@sentry/scraps/badge';
 import {LinkButton} from '@sentry/scraps/button';
 import {Checkbox} from '@sentry/scraps/checkbox';
 import {InfoText} from '@sentry/scraps/info';
 import {Flex} from '@sentry/scraps/layout';
 import {ExternalLink, Link} from '@sentry/scraps/link';
+import {Text} from '@sentry/scraps/text';
 import {Tooltip} from '@sentry/scraps/tooltip';
 
 import {Duration} from 'sentry/components/duration/duration';
@@ -34,7 +35,6 @@ import {
   useListItemCheckboxContext,
   type ListItemCheckboxState,
 } from 'sentry/utils/list/useListItemCheckboxState';
-import {generatePlatformIconName} from 'sentry/utils/replays/generatePlatformIconName';
 import {MIN_DEAD_RAGE_CLICK_SDK} from 'sentry/utils/replays/sdkVersions';
 import {useLocation} from 'sentry/utils/useLocation';
 import {useNavigate} from 'sentry/utils/useNavigate';
@@ -134,7 +134,7 @@ export const ReplayActivityColumn: ReplayTableColumn = {
 };
 
 export const ReplayBrowserColumn: ReplayTableColumn = {
-  Header: t('Browser'),
+  Header: t('Opening'),
   interactive: false,
   sortKey: 'browser.name',
   Component: ({replay, showDropdownFilters}) => {
@@ -154,15 +154,15 @@ export const ReplayBrowserColumn: ReplayTableColumn = {
       );
     }
 
-    const icon = generatePlatformIconName(name ?? '', version ?? undefined);
-
     const nameOrUnknown = name ?? t('Unknown');
     const versionOrBlank = version ?? '';
 
     return (
       <DropdownContainer key="browser">
         <Tooltip title={`${nameOrUnknown} ${versionOrBlank}`.trim()}>
-          <PlatformIcon platform={icon} size="20px" />
+          <Text size="sm" ellipsis>
+            {nameOrUnknown}
+          </Text>
           {showDropdownFilters ? (
             <OSBrowserDropdownFilter type="browser" name={name} version={version} />
           ) : null}
@@ -177,14 +177,14 @@ export const ReplayCountDeadClicksColumn: ReplayTableColumn = {
     <InfoText
       variant="inherit"
       title={tct(
-        'A dead click is a user click that does not result in any page activity after 7 seconds. Requires SDK version >= [minSDK]. [link:Learn more.]',
+        'A mistake is a move that loses between 1 and 3 pawns of evaluation. Requires engine version >= [minSDK]. [link:Learn more.]',
         {
           minSDK: MIN_DEAD_RAGE_CLICK_SDK.minVersion,
           link: <ExternalLink href="https://docs.sentry.io/platforms/javascript/" />,
         }
       )}
     >
-      {t('Dead clicks')}
+      {t('Mistakes')}
     </InfoText>
   ),
   interactive: false,
@@ -221,7 +221,7 @@ export const ReplayCountErrorsColumn: ReplayTableColumn = {
     <InfoText
       variant="inherit"
       title={tct(
-        'The error count only reflects errors generated within the Replay SDK. [inboundFilters:Inbound Filters] may have prevented those errors from being saved. [perfIssue:Performance] and other [replayIssue:error] types may have been added afterwards.',
+        'A blunder is a move that loses more than 3 pawns of evaluation. [inboundFilters:Opening theory] is excluded up to move 8. [perfIssue:Time pressure] and [replayIssue:premove] blunders are counted separately.',
         {
           inboundFilters: (
             <ExternalLink href="https://docs.sentry.io/concepts/data-management/filtering/" />
@@ -235,7 +235,7 @@ export const ReplayCountErrorsColumn: ReplayTableColumn = {
         }
       )}
     >
-      {t('Errors')}
+      {t('Blunders')}
     </InfoText>
   ),
   interactive: false,
@@ -272,14 +272,14 @@ export const ReplayCountRageClicksColumn: ReplayTableColumn = {
     <InfoText
       variant="inherit"
       title={tct(
-        'A rage click is 5 or more clicks on a dead element, which exhibits no page activity after 7 seconds. Requires SDK version >= [minSDK]. [link:Learn more.]',
+        'An inaccuracy is a move that loses less than 1 pawn of evaluation. Requires engine version >= [minSDK]. [link:Learn more.]',
         {
           minSDK: MIN_DEAD_RAGE_CLICK_SDK.minVersion,
           link: <ExternalLink href="https://docs.sentry.io/platforms/javascript/" />,
         }
       )}
     >
-      {t('Rage clicks')}
+      {t('Inaccuracies')}
     </InfoText>
   ),
   interactive: false,
@@ -327,7 +327,7 @@ export const ReplayDetailsLinkColumn: ReplayTableColumn = {
 };
 
 export const ReplayDurationColumn: ReplayTableColumn = {
-  Header: t('Duration'),
+  Header: t('Length'),
   interactive: false,
   sortKey: 'duration',
   Component: ({replay, showDropdownFilters}) => {
@@ -354,7 +354,7 @@ export const ReplayDurationColumn: ReplayTableColumn = {
 };
 
 export const ReplayOSColumn: ReplayTableColumn = {
-  Header: t('OS'),
+  Header: t('Time control'),
   interactive: false,
   sortKey: 'os.name',
   Component: ({replay, showDropdownFilters}) => {
@@ -362,7 +362,6 @@ export const ReplayOSColumn: ReplayTableColumn = {
       return null;
     }
     const {name, version} = replay.os;
-    const icon = generatePlatformIconName(name ?? '', version ?? undefined);
 
     const nameOrUnknown = name ?? t('Unknown');
     const versionOrBlank = version ?? '';
@@ -370,7 +369,7 @@ export const ReplayOSColumn: ReplayTableColumn = {
     return (
       <DropdownContainer key="os">
         <Tooltip title={`${nameOrUnknown} ${versionOrBlank}`.trim()}>
-          <PlatformIcon platform={icon} size="20px" />
+          <Tag variant="muted">{nameOrUnknown}</Tag>
           {showDropdownFilters ? (
             <OSBrowserDropdownFilter type="os" name={name} version={version} />
           ) : null}

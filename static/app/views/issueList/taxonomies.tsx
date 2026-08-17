@@ -30,7 +30,7 @@ export const ISSUE_TAXONOMY_CONFIG: Record<
 > = {
   [IssueTaxonomy.ERRORS_AND_OUTAGES]: {
     categories: [IssueCategory.ERROR, IssueCategory.OUTAGE],
-    label: t('Errors & Outages'),
+    label: t('Blunders & Losses'),
     key: 'errors-outages',
     description: t(
       'Issues that break functionality such as application errors, failed jobs, or downtime incidents.'
@@ -38,7 +38,7 @@ export const ISSUE_TAXONOMY_CONFIG: Record<
   },
   [IssueTaxonomy.BREACHED_METRICS]: {
     categories: [IssueCategory.METRIC],
-    label: t('Breached Metrics'),
+    label: t('Breached Ratings'),
     key: 'breached-metrics',
     description: t(
       'Issues that indicate degraded system behavior such as endpoint latency regressions or metric threshold violations'
@@ -51,7 +51,7 @@ export const ISSUE_TAXONOMY_CONFIG: Record<
       IssueCategory.FRONTEND,
       IssueCategory.MOBILE,
     ],
-    label: t('Warnings'),
+    label: t('Checks'),
     key: 'warnings',
     description: t(
       'Issues in your code or configuration that may not break functionality but can degrade performance or user experience'

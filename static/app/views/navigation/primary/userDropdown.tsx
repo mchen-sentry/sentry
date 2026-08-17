@@ -116,7 +116,7 @@ export function UserDropdown() {
             },
             {
               key: 'signout',
-              label: t('Sign Out'),
+              label: t('Resign'),
               onAction: handleLogout,
             },
           ],

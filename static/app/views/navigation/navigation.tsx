@@ -2,10 +2,11 @@ import {Fragment, type PropsWithChildren, type RefObject, useMemo, useRef} from 
 import {mergeProps} from '@react-aria/utils';
 import {motion, type MotionProps} from 'framer-motion';
 
-import {Stack} from '@sentry/scraps/layout';
-import {Flex} from '@sentry/scraps/layout';
+import {Button} from '@sentry/scraps/button';
+import {Flex, Stack} from '@sentry/scraps/layout';
 import {SizeProvider} from '@sentry/scraps/sizeContext';
 
+import {KnightMark} from 'sentry/chessMode/assets/knight';
 import Feature from 'sentry/components/acl/feature';
 import {ErrorBoundary} from 'sentry/components/errorBoundary';
 import {Override} from 'sentry/components/override';
@@ -13,6 +14,7 @@ import {
   IconCompass,
   IconDashboard,
   IconGraph,
+  IconGrid,
   IconIssues,
   IconSettings,
   IconSiren,
@@ -79,7 +81,22 @@ export function Navigation() {
     <Fragment>
       <PrimaryNavigation.Sidebar>
         <PrimaryNavigation.SidebarHeader>
-          <OrganizationDropdown />
+          {/*
+           * Pawn Patrol: the rail carries a single mark, the way Sentry's does.
+           * The knight is the product mark AND the org-switcher trigger, so the
+           * org avatar lives inside the menu instead of crowding the rail.
+           */}
+          <OrganizationDropdown
+            renderTrigger={triggerProps => (
+              <Button
+                {...triggerProps}
+                variant="transparent"
+                size="sm"
+                aria-label={t('Toggle organization menu')}
+                icon={<KnightMark height="22px" />}
+              />
+            )}
+          />
         </PrimaryNavigation.SidebarHeader>
         <PrimaryNavigation.List ref={ref}>
           <PrimaryNavigationItems listRef={ref} />
@@ -152,7 +169,7 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
             <PrimaryNavigation.Link
               to={`/${prefix}/issues/`}
               analyticsKey="issues"
-              label={t('Issues')}
+              label={t('Games')}
               {...mergeProps(
                 makeNavigationItemProps('issues', `/${prefix}/issues/`),
                 tourProps
@@ -163,6 +180,18 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
           </PrimaryNavigation.ListItem>
         )}
       </NavigationTourElement>
+
+      {/* Pawn Patrol: the live game surface, sitting directly under Games. */}
+      <PrimaryNavigation.ListItem>
+        <PrimaryNavigation.Link
+          to={`/${prefix}/play/`}
+          analyticsKey="play"
+          label={t('Play')}
+          {...makeNavigationItemProps('issues', `/${prefix}/play/`)}
+        >
+          <IconGrid />
+        </PrimaryNavigation.Link>
+      </PrimaryNavigation.ListItem>
 
       <NavigationTourElement id={NavigationTour.EXPLORE} title={null} description={null}>
         {tourProps => (
@@ -252,7 +281,7 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
         <PrimaryNavigation.Link
           to={`/${prefix}/monitors/`}
           analyticsKey="monitors"
-          label={t('Monitors')}
+          label={t('Clocks')}
           {...makeNavigationItemProps('monitors', `/${prefix}/monitors/`)}
         >
           <IconSiren />

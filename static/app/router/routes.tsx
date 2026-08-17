@@ -563,7 +563,7 @@ function buildRoutes(): RouteObject[] {
     },
     {
       path: 'seer/',
-      name: t('Seer'),
+      name: t('Grandmaster Seer'),
       // eslint-disable-next-line boundaries/dependencies -- TODO: move to getsentry routes
       component: make(() => import('getsentry/views/seerAutomation/projectDetails')),
     },
@@ -1582,7 +1582,8 @@ function buildRoutes(): RouteObject[] {
     },
     {
       path: ':replaySlug/',
-      component: make(() => import('sentry/views/explore/replays/details')),
+      // chess mode: replay detail plays the game back on a board, not rrweb
+      component: make(() => import('sentry/chessMode/components/chessReplayDetail')),
     },
   ];
   const replayRoutes: SentryRouteObject = {
@@ -2606,6 +2607,13 @@ function buildRoutes(): RouteObject[] {
     children: issueChildren,
   };
 
+  // Pawn Patrol: the live game surface.
+  const playRoutes: SentryRouteObject = {
+    path: '/play/',
+    withOrgPath: true,
+    component: make(() => import('sentry/chessMode/playView')),
+  };
+
   const adminManageChildren: SentryRouteObject[] = [
     {
       index: true,
@@ -2804,6 +2812,7 @@ function buildRoutes(): RouteObject[] {
       dashboardRoutes,
       feedbackv2Routes,
       issueRoutes,
+      playRoutes,
       alertRoutes,
       monitorRoutes,
       preprodRoutes,

@@ -134,7 +134,7 @@ export function ExploreSecondaryNavigation() {
                 ]}
                 analyticsItemName="explore_releases"
               >
-                {t('Releases')}
+                {t('Openings')}
               </SecondaryNavigation.Link>
             </SecondaryNavigation.ListItem>
             <Feature features="gen-ai-conversations">

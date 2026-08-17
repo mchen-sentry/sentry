@@ -233,7 +233,7 @@ export function ReplaySearchBar(props: Props) {
       searchSource={props.searchSource ?? 'replay_index'}
       placeholder={
         props.placeholder ??
-        t('Search for users, duration, clicked elements, count_errors, and more')
+        t('Search for players, opening, time control, blunder count, and more')
       }
       recentSearches={SavedSearchType.REPLAY}
     />

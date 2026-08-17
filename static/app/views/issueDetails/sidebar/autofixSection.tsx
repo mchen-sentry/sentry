@@ -92,7 +92,7 @@ export function AutofixSection({group, project}: AutofixSectionProps) {
     <SidebarFoldSection
       title={
         <Flex align="center" gap="xs">
-          <Text size="md">{t('Seer Autofix')}</Text>
+          <Text size="md">{t('Grandmaster Seer')}</Text>
           <IconSeer />
         </Flex>
       }
@@ -374,7 +374,7 @@ function AutofixPreviews({group, project, sections, referrer}: AutofixPreviewsPr
       <Button
         size="md"
         icon={<IconSeer />}
-        aria-label={t('Open Autofix')}
+        aria-label={t('Open Game Review')}
         variant="primary"
         onClick={openSeerDrawer}
         analyticsEventKey="issue_details.seer_opened"
@@ -392,7 +392,7 @@ function AutofixPreviews({group, project, sections, referrer}: AutofixPreviewsPr
           referrer,
         }}
       >
-        {t('Open Autofix')}
+        {t('Open Game Review')}
       </Button>
     </Stack>
   );

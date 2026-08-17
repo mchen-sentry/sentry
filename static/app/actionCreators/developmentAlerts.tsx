@@ -1,5 +1,6 @@
 import {ExternalLink} from '@sentry/scraps/link';
 
+import {CHESS_MODE_ENABLED} from 'sentry/chessMode/registry';
 import {DEPLOY_PREVIEW_CONFIG, EXPERIMENTAL_SPA} from 'sentry/constants';
 import {t, tct} from 'sentry/locale';
 import type {AddAlert} from 'sentry/views/app/globalAlerts';
@@ -36,8 +37,9 @@ export function displayDeployPreviewAlert(addAlert: AddAlert) {
 
 export function displayExperimentalSpaAlert(addAlert: AddAlert) {
   // Suppress when running as a deploy preview — the deploy preview banner
-  // takes precedence (see displayDeployPreviewAlert).
-  if (DEPLOY_PREVIEW_CONFIG || !EXPERIMENTAL_SPA) {
+  // takes precedence (see displayDeployPreviewAlert) — and in chess mode,
+  // where there is no production API behind the proxy at all.
+  if (DEPLOY_PREVIEW_CONFIG || !EXPERIMENTAL_SPA || CHESS_MODE_ENABLED) {
     return;
   }
 

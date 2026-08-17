@@ -1,6 +1,6 @@
 import React, {createContext, useContext, useEffect, useMemo, useState} from 'react';
 
-const DEFAULT_PAGE_TITLE = 'Sentry';
+const DEFAULT_PAGE_TITLE = 'Pawn Patrol';
 const SEPARATOR = ' — ';
 
 interface TitleEntry {

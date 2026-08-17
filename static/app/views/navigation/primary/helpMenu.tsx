@@ -76,7 +76,7 @@ export function PrimaryNavigationHelpMenu({
         },
         {
           key: 'docs',
-          label: t('Documentation'),
+          label: t('Opening Book'),
           externalHref: 'https://docs.sentry.io',
           leadingItems: (
             <MenuIcon>
@@ -96,7 +96,7 @@ export function PrimaryNavigationHelpMenu({
         },
         {
           key: 'help-center',
-          label: t('Help Center'),
+          label: t('Endgame Tablebase'),
           externalHref: 'https://www.sentry.help/',
           leadingItems: (
             <MenuIcon>
@@ -106,7 +106,7 @@ export function PrimaryNavigationHelpMenu({
         },
         {
           key: 'support',
-          label: t('Contact Support'),
+          label: t('Ask for a Takeback'),
           ...contactSupportItem,
           leadingItems: (
             <MenuIcon>
@@ -129,7 +129,7 @@ export function PrimaryNavigationHelpMenu({
       children: [
         {
           key: 'github',
-          label: t('Sentry on GitHub'),
+          label: t('Pawn Patrol on GitHub'),
           externalHref: 'https://github.com/getsentry/sentry',
           leadingItems: (
             <MenuIcon>
@@ -261,7 +261,7 @@ function getContactSupportItem(organization: Organization): MenuItemProps | null
   // Use Intercom (lazily initialized on first click)
   return {
     key: 'support',
-    label: t('Contact Support'),
+    label: t('Ask for a Takeback'),
     async onAction() {
       trackAnalytics('intercom_link.clicked', {
         organization,
