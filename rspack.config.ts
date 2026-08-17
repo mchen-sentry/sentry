@@ -922,11 +922,12 @@ if (IS_UI_DEV_ONLY || SENTRY_EXPERIMENTAL_SPA) {
       ...(IS_UI_DEV_ONLY
         ? {devServer: `https://127.0.0.1:${SENTRY_WEBPACK_PROXY_PORT}`}
         : {}),
-      favicon: path.resolve(sentryDjangoAppPath, 'images', 'favicon-dev.png'),
+      // Pawn Patrol branding for the pure-client build.
+      favicon: path.resolve(staticPrefix, 'app', 'chessMode', 'assets', 'knight.svg'),
       template: path.resolve(staticPrefix, 'index.ejs'),
       mobile: true,
       excludeChunks: IS_ADMIN_UI_DEV ? ['app'] : ['gsAdmin'],
-      title: 'Sentry',
+      title: 'Pawn Patrol',
       window: {
         __SENTRY_DEV_UI: true,
       },

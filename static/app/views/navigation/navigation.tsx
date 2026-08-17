@@ -6,6 +6,7 @@ import {Stack} from '@sentry/scraps/layout';
 import {Flex} from '@sentry/scraps/layout';
 import {SizeProvider} from '@sentry/scraps/sizeContext';
 
+import {KnightMark} from 'sentry/chessMode/assets/knight';
 import Feature from 'sentry/components/acl/feature';
 import {ErrorBoundary} from 'sentry/components/errorBoundary';
 import {Override} from 'sentry/components/override';
@@ -79,7 +80,11 @@ export function Navigation() {
     <Fragment>
       <PrimaryNavigation.Sidebar>
         <PrimaryNavigation.SidebarHeader>
-          <OrganizationDropdown />
+          {/* Pawn Patrol: knight mark sits beside the org switcher. */}
+          <Flex align="center" gap="xs">
+            <KnightMark height="24px" />
+            <OrganizationDropdown />
+          </Flex>
         </PrimaryNavigation.SidebarHeader>
         <PrimaryNavigation.List ref={ref}>
           <PrimaryNavigationItems listRef={ref} />
@@ -152,7 +157,7 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
             <PrimaryNavigation.Link
               to={`/${prefix}/issues/`}
               analyticsKey="issues"
-              label={t('Issues')}
+              label={t('Games')}
               {...mergeProps(
                 makeNavigationItemProps('issues', `/${prefix}/issues/`),
                 tourProps

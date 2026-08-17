@@ -1,3 +1,5 @@
+import {chessConfig} from 'sentry/chessMode/fixtures';
+import {CHESS_MODE_ENABLED} from 'sentry/chessMode/registry';
 import type {ResponseMeta} from 'sentry/types/api';
 import type {Config} from 'sentry/types/system';
 import {extractSlug} from 'sentry/utils/extractSlug';
@@ -127,6 +129,16 @@ function preloadOrganizationData(config: Config) {
  * template.
  */
 export async function bootstrap() {
+  // Pawn Patrol: there is no backend to hydrate from, so synthesize the client
+  // config (already-authenticated user, `pawn-patrol` as the last org). Org /
+  // projects / teams are then fetched through the api client, which chess mode
+  // intercepts — no preload requests are issued.
+  if (CHESS_MODE_ENABLED) {
+    const config = chessConfig();
+    window.__initialData = config;
+    return bootApplication(config);
+  }
+
   const bootstrapData = window.__initialData;
 
   // If __initialData is not already set on the window, we are likely running in

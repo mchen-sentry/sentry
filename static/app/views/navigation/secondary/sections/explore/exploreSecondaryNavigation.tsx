@@ -121,7 +121,7 @@ export function ExploreSecondaryNavigation() {
                   to={`${baseUrl}/replays/`}
                   analyticsItemName="explore_replays"
                 >
-                  {t('Replays')}
+                  {t('Game Replays')}
                 </SecondaryNavigation.Link>
               </SecondaryNavigation.ListItem>
             </Feature>
@@ -134,7 +134,7 @@ export function ExploreSecondaryNavigation() {
                 ]}
                 analyticsItemName="explore_releases"
               >
-                {t('Releases')}
+                {t('Openings')}
               </SecondaryNavigation.Link>
             </SecondaryNavigation.ListItem>
             <Feature features="gen-ai-conversations">

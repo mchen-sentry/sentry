@@ -24,7 +24,7 @@ export function IssuesSecondaryNavigation() {
   const hasInbox = hasProgressUi && orgHasSeerAccess(organization);
   return (
     <Fragment>
-      <SecondaryNavigation.Header>{t('Issues')}</SecondaryNavigation.Header>
+      <SecondaryNavigation.Header>{t('Games')}</SecondaryNavigation.Header>
       <SecondaryNavigation.Body>
         <SecondaryNavigation.Section id="issues-feed">
           <SecondaryNavigation.List>

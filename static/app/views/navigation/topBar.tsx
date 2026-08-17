@@ -5,7 +5,7 @@ import {mergeProps} from '@react-aria/utils';
 import {Flex} from '@sentry/scraps/layout';
 import {SizeProvider} from '@sentry/scraps/sizeContext';
 import {slot, withSlots} from '@sentry/scraps/slot';
-import {Heading} from '@sentry/scraps/text';
+import {Heading, Text} from '@sentry/scraps/text';
 
 import {FeedbackButton} from 'sentry/components/feedbackButton/feedbackButton';
 import {t} from 'sentry/locale';
@@ -75,6 +75,11 @@ function TopBarContent() {
       wrap="wrap"
     >
       <SizeProvider size="sm">
+        {/* Pawn Patrol wordmark. The knight mark lives in the sidebar rail; this
+            is the text half of the lockup, where there is room for it. */}
+        <Text bold size="lg" style={{whiteSpace: 'nowrap'}}>
+          {t('Pawn Patrol')}
+        </Text>
         {/*
          * Breadcrumbs and the title are separate slots so the title slot always
          * owns the page heading. BreadcrumbList.Title renders title content

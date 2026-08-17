@@ -39,7 +39,7 @@ export function SeerDrawerHeader({
     <DrawerHeader hideBar hideCloseButtonText>
       <Flex justify="between" width="100%">
         <Flex align="center" gap="xs">
-          <Text>{t('Seer Autofix')}</Text>
+          <Text>{t('Grandmaster Seer')}</Text>
           {tooltip && <InfoTip title={tooltip} size="xs" />}
         </Flex>
         <Flex align="center" gap="xs">

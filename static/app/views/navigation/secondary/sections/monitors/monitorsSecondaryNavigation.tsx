@@ -70,7 +70,7 @@ export function MonitorsSecondaryNavigation() {
                   to={`${baseUrl}/uptime/`}
                   analyticsItemName="monitors_uptime"
                 >
-                  {t('Uptime')}
+                  {t('Clock Flags')}
                 </SecondaryNavigation.Link>
               </SecondaryNavigation.ListItem>
             </Feature>
@@ -94,7 +94,7 @@ export function MonitorsSecondaryNavigation() {
                 to={`${baseUrl}/alerts/`}
                 analyticsItemName="monitors_automations"
               >
-                {t('Alerts')}
+                {t('Blunder Alerts')}
               </SecondaryNavigation.Link>
             </SecondaryNavigation.ListItem>
           </SecondaryNavigation.List>
