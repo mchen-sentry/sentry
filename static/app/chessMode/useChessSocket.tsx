@@ -52,11 +52,7 @@ export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting';
  * The server only broadcasts on state changes, so between broadcasts the
  * running side's clock has to be derived from when it started.
  */
-export function projectedTime(
-  clock: ClockState,
-  color: PieceColor,
-  now: number
-): number {
+export function projectedTime(clock: ClockState, color: PieceColor, now: number): number {
   if (clock.running !== color || clock.since === null) {
     return clock[color];
   }

@@ -180,6 +180,18 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
         )}
       </NavigationTourElement>
 
+      {/* Pawn Patrol: the live game surface, sitting directly under Games. */}
+      <PrimaryNavigation.ListItem>
+        <PrimaryNavigation.Link
+          to={`/${prefix}/play/`}
+          analyticsKey="play"
+          label={t('Play')}
+          {...makeNavigationItemProps('issues', `/${prefix}/play/`)}
+        >
+          <KnightMark height="20px" />
+        </PrimaryNavigation.Link>
+      </PrimaryNavigation.ListItem>
+
       <NavigationTourElement id={NavigationTour.EXPLORE} title={null} description={null}>
         {tourProps => (
           <PrimaryNavigation.ListItem>

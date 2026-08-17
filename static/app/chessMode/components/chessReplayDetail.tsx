@@ -452,6 +452,11 @@ export default function ChessReplayDetail() {
     setPly(Math.max(0, Math.min(plies.length, next)));
   }
 
+  function step(delta: number) {
+    setPlaying(false);
+    setPly(current => Math.max(0, Math.min(plies.length, current + delta)));
+  }
+
   function togglePlay() {
     setPlaying(current => {
       if (!current && ply >= plies.length) {
@@ -546,6 +551,7 @@ export default function ChessReplayDetail() {
         </Flex>
 
         <Grid columns={{xs: '1fr', md: 'minmax(0, 1fr) 340px'}} gap="xl" padding="xl">
+          <Stack gap="xl" minWidth="0">
           <Panel>
             <PanelHeader>
               <Flex justify="between" align="center" width="100%">
@@ -598,7 +604,7 @@ export default function ChessReplayDetail() {
                           variant="transparent"
                           aria-label={t('Previous move')}
                           icon={<IconPrevious />}
-                          onClick={() => seek(ply - 1)}
+                          onClick={() => step(-1)}
                         />
                         <Button
                           size="sm"
@@ -612,7 +618,7 @@ export default function ChessReplayDetail() {
                           variant="transparent"
                           aria-label={t('Next move')}
                           icon={<IconNext />}
-                          onClick={() => seek(ply + 1)}
+                          onClick={() => step(1)}
                         />
                       </ButtonBar>
                       <Text size="sm" variant="muted" monospace tabular>
@@ -641,6 +647,14 @@ export default function ChessReplayDetail() {
               </Stack>
             </PanelBody>
           </Panel>
+
+            <Panel>
+              <PanelHeader>{t('Console')}</PanelHeader>
+              <PanelBody>
+                <EngineConsole game={game} plies={plies} ply={ply} />
+              </PanelBody>
+            </Panel>
+          </Stack>
 
           <Stack gap="xl">
             <Panel>
@@ -697,12 +711,6 @@ export default function ChessReplayDetail() {
               </PanelBody>
             </Panel>
 
-            <Panel>
-              <PanelHeader>{t('Console')}</PanelHeader>
-              <PanelBody>
-                <EngineConsole game={game} plies={plies} ply={ply} />
-              </PanelBody>
-            </Panel>
           </Stack>
         </Grid>
       </Stack>
@@ -715,19 +723,29 @@ export default function ChessReplayDetail() {
 const BoardRow = styled('div')`
   display: flex;
   align-items: stretch;
-  gap: ${p => p.theme.space.xs};
   width: 100%;
   max-width: 520px;
 `;
 
 const EvalColumn = styled('div')`
   position: relative;
-  width: 14px;
+  width: 16px;
   flex: none;
   overflow: hidden;
-  border-radius: ${p => p.theme.radius.xs};
   border: 1px solid ${p => p.theme.tokens.border.primary};
+  border-right: 0;
+  border-radius: ${p => p.theme.radius.xs} 0 0 ${p => p.theme.radius.xs};
   background: ${p => p.theme.tokens.graphics.neutral.vibrant};
+
+  /* the even-material line, so the split is readable at a glance */
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    border-top: 1px dashed ${p => p.theme.tokens.border.primary};
+  }
 `;
 
 /** White's share, filling from the bottom the way an engine eval bar does. */
@@ -746,7 +764,8 @@ const EvalReadout = styled('span')<{isLosing: boolean}>`
   right: 0;
   ${p => (p.isLosing ? 'bottom: 2px;' : 'top: 2px;')}
   text-align: center;
-  font-size: 8px;
+  font-size: 9px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: ${p =>
     p.isLosing ? p.theme.tokens.content.primary : p.theme.tokens.content.onVibrant.light};
@@ -757,7 +776,7 @@ const BoardFrame = styled('div')`
   min-width: 0;
   container-type: inline-size;
   border: 1px solid ${p => p.theme.tokens.border.primary};
-  border-radius: ${p => p.theme.radius.xs};
+  border-radius: 0 ${p => p.theme.radius.xs} ${p => p.theme.radius.xs} 0;
   overflow: hidden;
 `;
 
@@ -797,7 +816,7 @@ const Square = styled('div')<{isDark: boolean; highlight?: 'move' | 'bad'}>`
       p.highlight === 'bad'
         ? p.theme.tokens.border.danger.vibrant
         : p.highlight === 'move'
-          ? p.theme.tokens.border.accent.vibrant
+          ? p.theme.tokens.border.warning.vibrant
           : 'transparent'};
 `;
 

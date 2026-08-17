@@ -2607,6 +2607,13 @@ function buildRoutes(): RouteObject[] {
     children: issueChildren,
   };
 
+  // Pawn Patrol: the live game surface.
+  const playRoutes: SentryRouteObject = {
+    path: '/play/',
+    withOrgPath: true,
+    component: make(() => import('sentry/chessMode/playView')),
+  };
+
   const adminManageChildren: SentryRouteObject[] = [
     {
       index: true,
@@ -2805,6 +2812,7 @@ function buildRoutes(): RouteObject[] {
       dashboardRoutes,
       feedbackv2Routes,
       issueRoutes,
+      playRoutes,
       alertRoutes,
       monitorRoutes,
       preprodRoutes,

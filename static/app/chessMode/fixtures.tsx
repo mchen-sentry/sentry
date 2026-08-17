@@ -69,8 +69,10 @@ export const CHESS_ORG_FEATURES: string[] = [
 
 export const CHESS_USER: any = {
   id: '1',
-  username: 'magnus@pawn-patrol.dev',
-  email: 'magnus@pawn-patrol.dev',
+  // Handle matches the convention the other players use (en.passant.pete,
+  // knight.watch), and "the mouse" is a callback to the mouse-slip games.
+  username: 'magnus.the.mouse',
+  email: 'magnus.the.mouse@pawn-patrol.dev',
   name: 'Magnus Sentry',
   isAuthenticated: true,
   options: {
@@ -88,7 +90,7 @@ export const CHESS_USER: any = {
   authenticators: [],
   canReset2fa: false,
   dateJoined: '2024-01-01T00:00:00.000Z',
-  emails: [{id: '1', email: 'magnus@pawn-patrol.dev', is_verified: true}],
+  emails: [{id: '1', email: 'magnus.the.mouse@pawn-patrol.dev', is_verified: true}],
   has2fa: false,
   identities: [],
   isActive: true,
@@ -192,7 +194,23 @@ export const CHESS_PROJECT: any = {
   // Drives the Highlights panel at the top of every issue. The context alias
   // keys must match the aliases games.tsx emits on its events exactly, or the
   // panel silently renders empty.
-  highlightTags: ['result', 'termination', 'opening', 'accuracy', 'blunders'],
+  //
+  // Order matters beyond the Highlights panel: issueTagsPreview puts these keys
+  // first in the tag distribution card and then slices to 4. Lead with the
+  // per-move tags, which vary within a game and produce staggered bars — the
+  // game-level ones (result, termination, ...) are constant per game and would
+  // render as four identical 100% bars. The panel itself shows the whole list.
+  highlightTags: [
+    'phase',
+    'piece',
+    'eval_band',
+    'grade',
+    'result',
+    'termination',
+    'opening',
+    'accuracy',
+    'blunders',
+  ],
   highlightContext: {
     'Chess Game': ['room', 'result', 'termination', 'final_fen'],
     Players: ['white', 'black', 'white_accuracy', 'black_accuracy'],

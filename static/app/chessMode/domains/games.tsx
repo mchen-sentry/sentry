@@ -44,7 +44,7 @@ const USERS: ChessUser[] = [
     id: '1',
     name: 'Magnus Sentry',
     username: 'magnus',
-    email: 'magnus@pawn-patrol.dev',
+    email: 'magnus.the.mouse@pawn-patrol.dev',
   },
   {
     id: '2',
@@ -2434,10 +2434,7 @@ function durationSeconds(value: string, fallback: number) {
  * events, so at a daily interval it shows up as one bar.
  */
 function gameSeriesBuckets(game: Game, params: Record<string, any>) {
-  const intervalSec = Math.max(
-    60,
-    durationSeconds(String(params.interval ?? '1h'), 3600)
-  );
+  const requested = Math.max(60, durationSeconds(String(params.interval ?? '1h'), 3600));
 
   // The default "Since First Seen" filter sends start/end instead of a period.
   const explicitEnd = Date.parse(String(params.end ?? ''));
@@ -2447,7 +2444,13 @@ function gameSeriesBuckets(game: Game, params: Record<string, any>) {
   const periodSec = hasRange
     ? (explicitEnd - explicitStart) / 1000
     : durationSeconds(String(params.statsPeriod ?? '14d'), 14 * 86400);
-  const count = Math.min(Math.max(Math.ceil(periodSec / intervalSec), 2), 1000);
+
+  // Widen the interval rather than truncating the window. Capping the bucket
+  // count alone would silently return a range shorter than the one asked for,
+  // and an old game would fall outside it and chart as empty.
+  const MAX_BUCKETS = 1000;
+  const intervalSec = Math.max(requested, Math.ceil(periodSec / MAX_BUCKETS));
+  const count = Math.min(Math.max(Math.ceil(periodSec / intervalSec), 2), MAX_BUCKETS);
 
   const endSec = hasRange ? Math.floor(explicitEnd / 1000) : Math.floor(NOW / 1000);
   const startedSec = Math.floor(Date.parse(game.firstSeen) / 1000);
