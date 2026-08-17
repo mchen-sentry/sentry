@@ -28,8 +28,8 @@ const PROJECT_SLUG = CHESS_PROJECT_SLUG;
 const PROJECT = {
   id: PROJECT_ID,
   slug: PROJECT_SLUG,
-  name: 'chess',
-  platform: 'javascript',
+  name: 'Pawn Mortem',
+  platform: 'other',
 };
 
 type ChessUser = {
@@ -1078,7 +1078,7 @@ function buildGame(seed: GameSeed, i: number) {
  * second, different one.
  */
 function exceptionType(seed: GameSeed) {
-  return /^([A-Za-z_][A-Za-z0-9_]*):\s/.exec(seed.title)?.[1] ?? seed.errType;
+  return /^([A-Za-z_]\w*):\s/.exec(seed.title)?.[1] ?? seed.errType;
 }
 
 /** Sentry culprits read `path in function`; so do these. */
@@ -1137,8 +1137,9 @@ function buildStats(i: number, plies: number, firstSeenMs: number, lastSeenMs: n
     }
     distribute(plies, live.length).forEach((count, n) => {
       const slot = live[n];
-      if (slot !== undefined && out[slot]) {
-        out[slot]![1] = count + Math.floor(rand() * 2);
+      const bucket = slot === undefined ? undefined : out[slot];
+      if (bucket) {
+        bucket[1] = count + Math.floor(rand() * 2);
       }
     });
     return out;
@@ -1157,10 +1158,10 @@ function distribute(total: number, slots: number): number[] {
     return [];
   }
   const base = Math.floor(total / slots);
-  const out = new Array(slots).fill(base);
+  const out = Array.from({length: slots}, () => base);
   let remainder = total - base * slots;
   for (let n = 0; remainder > 0; n = (n + 1) % slots, remainder--) {
-    out[n]++;
+    out[n] = (out[n] ?? 0) + 1;
   }
   return out;
 }
@@ -1218,7 +1219,7 @@ function buildGroup(game: Game): any {
     substatus,
     statusDetails: {},
     isPublic: false,
-    platform: 'javascript',
+    platform: 'other',
     project: PROJECT,
     type: 'error',
     issueCategory: 'error',
@@ -1484,7 +1485,7 @@ function buildEvent(game: Game, eventId?: string): any {
     title: seed.title,
     culprit: game.culprit,
     message: seed.errValue,
-    platform: 'javascript',
+    platform: 'other',
     type: 'error',
     metadata: {
       type: exceptionType(seed),

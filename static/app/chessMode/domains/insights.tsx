@@ -18,6 +18,20 @@ import type {ChessRoute} from 'sentry/chessMode/registry';
 const DASHBOARD_ID = '1';
 const DASHBOARD_TITLE = 'Pawn Patrol Overview';
 
+/**
+ * Extra dashboards so the manage page doesn't read as a one-row demo fixture.
+ * Every id resolves to the same widget set, retitled — enough for a click
+ * through from the list to land somewhere coherent.
+ */
+const OTHER_DASHBOARDS: Array<[string, string, string]> = [
+  ['2', 'Board Health', 'rook.rollins'],
+  ['3', 'Blunder Triage', 'zugzwang.zoe'],
+  ['4', 'Endgame Performance', 'castle.jenkins'],
+  ['5', 'Time Control SLOs', 'knight.watch'],
+  ['6', 'Opening Repertoire (WIP)', 'gambit.greer'],
+  ['7', '[Copy of] Board Health', 'pawn.stark'],
+];
+
 function bigNumber(
   id: string,
   title: string,
@@ -45,17 +59,11 @@ function bigNumber(
   };
 }
 
-function chart(
-  id: string,
-  title: string,
-  displayType: 'line' | 'area',
-  conditions: string,
-  x: number
-) {
+function lineChart(id: string, title: string, conditions: string, x: number) {
   return {
     id,
     title,
-    displayType,
+    displayType: 'line',
     widgetType: 'error-events',
     interval: '1h',
     layout: {x, y: 1, w: 3, h: 2, minH: 2},
@@ -69,6 +77,33 @@ function chart(
         fields: ['count()'],
         conditions,
         orderby: '',
+      },
+    ],
+  };
+}
+
+/**
+ * Sentry's "Events by level" widget, in chess: count() grouped by the move
+ * annotation. Grouping (rather than three separate aggregates) is what gives
+ * the legend short, readable series names.
+ */
+function severityChart(id: string, title: string, x: number) {
+  return {
+    id,
+    title,
+    displayType: 'area',
+    widgetType: 'error-events',
+    interval: '1h',
+    limit: 3,
+    layout: {x, y: 1, w: 3, h: 2, minH: 2},
+    queries: [
+      {
+        name: '',
+        aggregates: ['count()'],
+        columns: ['chess.severity'],
+        fields: ['chess.severity', 'count()'],
+        conditions: 'chess.event:annotated_move',
+        orderby: '-count()',
       },
     ],
   };
@@ -103,15 +138,17 @@ function table(
   };
 }
 
+// Titles borrow Sentry's metric vocabulary (crash-free rate, aggregate
+// function names, percentiles, throughput units) rather than chess.com's.
 const WIDGETS = [
-  bigNumber('1', 'Games Played', 'count()', 'chess.event:game_finished', 0),
-  bigNumber('2', 'Average Accuracy', 'avg(chess.accuracy)', '', 2),
-  bigNumber('3', 'Blunders per Game', 'avg(chess.blunders)', '', 4),
-  chart('4', 'Games per Hour', 'line', 'chess.event:game_finished', 0),
-  chart('5', 'Blunders per Hour', 'area', 'chess.event:blunder', 3),
+  bigNumber('1', 'Blunder-Free Rate', 'blunder_free_rate()', '', 0),
+  bigNumber('2', 'avg(accuracy)', 'avg(chess.accuracy)', '', 2),
+  bigNumber('3', 'p75 Blunders per Game', 'p75(chess.blunders)', '', 4),
+  severityChart('4', 'Blunders by Severity', 0),
+  lineChart('5', 'Game Throughput (gpm)', 'chess.event:game_finished', 3),
   table(
     '6',
-    'Top Openings',
+    'Openings by Volume',
     'chess.opening',
     ['count()', 'avg(chess.accuracy)'],
     ['Opening', 'Games', 'Accuracy'],
@@ -119,7 +156,7 @@ const WIDGETS = [
   ),
   table(
     '7',
-    'Most Blundered By',
+    'Players Ordered by Blunder Rate',
     'chess.player',
     ['count()', 'avg(chess.blunders)'],
     ['Player', 'Games', 'Blunders'],
@@ -127,39 +164,55 @@ const WIDGETS = [
   ),
 ];
 
-const DASHBOARD = {
-  id: DASHBOARD_ID,
-  title: DASHBOARD_TITLE,
-  dateCreated: new Date(Date.now() - 30 * 86400 * 1000).toISOString(),
-  // Match the url's `?project=`, otherwise the filter bar reports the page
-  // filters as unsaved changes and shows Save/Cancel on first load.
-  projects: [Number(CHESS_PROJECT_ID)],
-  environment: [],
-  filters: {},
-  permissions: {isEditableByEveryone: true},
-  isFavorited: true,
-  widgets: WIDGETS,
-};
+function dashboardFor(id: string, title: string) {
+  return {
+    id,
+    title,
+    dateCreated: new Date(Date.now() - 30 * 86400 * 1000).toISOString(),
+    // Match the url's `?project=`, otherwise the filter bar reports the page
+    // filters as unsaved changes and shows Save/Cancel on first load.
+    projects: [Number(CHESS_PROJECT_ID)],
+    environment: [],
+    filters: {},
+    permissions: {isEditableByEveryone: true},
+    isFavorited: id === DASHBOARD_ID,
+    widgets: WIDGETS,
+  };
+}
 
-const DASHBOARD_LIST_ITEM = {
-  id: DASHBOARD_ID,
-  title: DASHBOARD_TITLE,
-  widgetDisplay: WIDGETS.map(widget => widget.displayType),
-  widgetPreview: WIDGETS.map(widget => ({
-    displayType: widget.displayType,
-    layout: widget.layout,
-  })),
-  projects: [Number(CHESS_PROJECT_ID)],
-  environment: [],
-  filters: {},
-  dateCreated: DASHBOARD.dateCreated,
-  isFavorited: true,
-  createdBy: {
-    id: '1',
-    name: 'Magnus Sentry',
-    email: 'magnus@pawn-patrol.dev',
-  },
-};
+const DASHBOARD_TITLES = new Map<string, string>([
+  [DASHBOARD_ID, DASHBOARD_TITLE],
+  ...OTHER_DASHBOARDS.map(([id, title]) => [id, title] as [string, string]),
+]);
+
+function listItem(id: string, title: string, owner: string, daysAgo: number) {
+  return {
+    id,
+    title,
+    widgetDisplay: WIDGETS.map(widget => widget.displayType),
+    widgetPreview: WIDGETS.map(widget => ({
+      displayType: widget.displayType,
+      layout: widget.layout,
+    })),
+    projects: [Number(CHESS_PROJECT_ID)],
+    environment: [],
+    filters: {},
+    dateCreated: new Date(Date.now() - daysAgo * 86400 * 1000).toISOString(),
+    isFavorited: id === DASHBOARD_ID,
+    createdBy: {
+      id,
+      name: owner,
+      email: `${owner}@pawn-patrol.dev`,
+    },
+  };
+}
+
+const DASHBOARD_LIST = [
+  listItem(DASHBOARD_ID, DASHBOARD_TITLE, 'magnus.sentry', 30),
+  ...OTHER_DASHBOARDS.map(([id, title, owner], index) =>
+    listItem(id, title, owner, 3 + index * 11)
+  ),
+];
 
 // -- timeseries generation ---------------------------------------------------
 
@@ -212,6 +265,22 @@ function makeSeries(query: any, {base, swing}: {base: number; swing: number}) {
     start: data[0]?.[0],
     end: data[data.length - 1]?.[0],
   };
+}
+
+/**
+ * The keyed multi-series shape, used when a chart query groups by a column.
+ * Keys become the legend labels, `order` fixes the stacking order.
+ */
+function makeGroupedSeries(
+  query: {interval: string | null; statsPeriod: string | null},
+  groups: Array<{base: number; name: string; swing: number}>
+) {
+  return Object.fromEntries(
+    groups.map((group, index) => [
+      group.name,
+      {...makeSeries(query, group), order: index},
+    ])
+  );
 }
 
 // -- table data --------------------------------------------------------------
@@ -286,14 +355,21 @@ function tableResponse(fields: string[]) {
   // Single-aggregate request: a big_number widget.
   const values: Record<string, number> = {
     'count()': 1847,
+    // A percentage field is rendered as a fraction, so 0.982 shows as 98.2%.
+    'blunder_free_rate()': 0.982,
     'avg(chess.accuracy)': 87.4,
+    'p75(chess.blunders)': 2.3,
     'avg(chess.blunders)': 2.3,
   };
   const row: Record<string, number | string> = {id: '1'};
   const meta: Record<string, string> = {};
   for (const field of fields) {
     row[field] = values[field] ?? 0;
-    meta[field] = field.startsWith('count') ? 'integer' : 'number';
+    meta[field] = field.includes('rate()')
+      ? 'percentage'
+      : field.startsWith('count')
+        ? 'integer'
+        : 'number';
   }
   return {data: [row], meta: {fields: meta, units: {}}};
 }
@@ -331,27 +407,48 @@ const routes: ChessRoute[] = [
     handler: () => ({}),
   },
   {
+    // Dashboard list. `?filter=onlyFavorites` and `?filter=onlyPrebuilt` come
+    // through here too, hence the filtering on the query rather than the path.
     url: /\/organizations\/[^/]+\/dashboards\/(\?.*)?$/,
-    handler: () => [DASHBOARD_LIST_ITEM],
+    handler: url => {
+      const filter = queryParams(url).get('filter');
+      if (filter === 'onlyFavorites') {
+        return DASHBOARD_LIST.filter(item => item.isFavorited);
+      }
+      if (filter === 'onlyPrebuilt') {
+        return [];
+      }
+      return DASHBOARD_LIST;
+    },
   },
   {
     url: /\/organizations\/[^/]+\/dashboards\/[^/]+\/(\?.*)?$/,
-    handler: () => DASHBOARD,
+    handler: url => {
+      const id = url.match(/\/dashboards\/([^/?]+)\//)?.[1] ?? DASHBOARD_ID;
+      return dashboardFor(id, DASHBOARD_TITLES.get(id) ?? DASHBOARD_TITLE);
+    },
   },
   {
-    // Chart data for every widget on the dashboard. The widget's `conditions`
-    // string arrives as the `query` param, which is how the two charts are
-    // told apart.
+    // Chart data for every widget on the dashboard. A query that groups by a
+    // column needs the keyed multi-series shape; everything else is a single
+    // series told apart by the widget's `conditions`, which arrive as `query`.
     url: /\/organizations\/[^/]+\/events-stats\/(\?.*)?$/,
     handler: url => {
       const params = queryParams(url);
-      const shape = params.get('query')?.includes('blunder')
-        ? {base: 34, swing: 22}
-        : {base: 96, swing: 40};
-      return makeSeries(
-        {interval: params.get('interval'), statsPeriod: params.get('statsPeriod')},
-        shape
-      );
+      const timing = {
+        interval: params.get('interval'),
+        statsPeriod: params.get('statsPeriod'),
+      };
+
+      if (listParam(params, 'field').some(field => field.includes('chess.severity'))) {
+        return makeGroupedSeries(timing, [
+          {name: 'inaccuracy', base: 62, swing: 30},
+          {name: 'mistake', base: 34, swing: 18},
+          {name: 'blunder', base: 15, swing: 11},
+        ]);
+      }
+
+      return makeSeries(timing, {base: 96, swing: 40});
     },
   },
   {

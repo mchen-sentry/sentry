@@ -30,7 +30,7 @@ export const ISSUE_TAXONOMY_CONFIG: Record<
 > = {
   [IssueTaxonomy.ERRORS_AND_OUTAGES]: {
     categories: [IssueCategory.ERROR, IssueCategory.OUTAGE],
-    label: t('Blunders & Resignations'),
+    label: t('Blunders & Losses'),
     key: 'errors-outages',
     description: t(
       'Issues that break functionality such as application errors, failed jobs, or downtime incidents.'

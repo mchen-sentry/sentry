@@ -8,6 +8,16 @@
  *
  * Unmatched requests never reach the network. They resolve to an empty 200 and
  * are logged (and recorded on `window.__chessUnmatched`) so gaps are visible.
+ *
+ * Every domain file needs `// eslint-disable-next-line @sentry/no-default-exports`
+ * above its `export default`. Without it `eslint --fix` rewrites the default
+ * export into a named one, which unregisters the entire domain silently — the
+ * app still builds and every one of that domain's endpoints starts falling
+ * through to the empty-200 default.
+ *
+ * Debugging, from the browser console on any page:
+ *   await __chessProbe(url)  -> {matched, source, pattern, status, body}
+ *   __chessWhoOwns(url)      -> every route that matches, winner first
  */
 
 /**

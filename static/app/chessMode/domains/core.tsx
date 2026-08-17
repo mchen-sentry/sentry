@@ -245,6 +245,13 @@ const routes: ChessRoute[] = [
     handler: () => [],
   },
   {
+    // Starred queries in the Explore nav. `[]` is the correct empty shape —
+    // exploreSecondaryNavigation gates on `length > 0` and hides the section.
+    // Fires on every page, so it is handled here rather than left to log.
+    url: /^\/organizations\/[^/]+\/explore\/saved\//,
+    handler: () => [],
+  },
+  {
     url: /^\/(organizations\/[^/]+\/)?sentry-apps?(-installations)?\//,
     handler: () => [],
   },

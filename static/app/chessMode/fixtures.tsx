@@ -189,6 +189,14 @@ export const CHESS_PROJECT: any = {
   latestRelease: null,
   avatar: {avatarType: 'letter_avatar', avatarUuid: null},
   eventProcessing: {symbolicationDegraded: false},
+  // Drives the Highlights panel at the top of every issue. The context alias
+  // keys must match the aliases games.tsx emits on its events exactly, or the
+  // panel silently renders empty.
+  highlightTags: ['result', 'termination', 'opening', 'accuracy', 'blunders'],
+  highlightContext: {
+    'Chess Game': ['room', 'result', 'termination', 'final_fen'],
+    Players: ['white', 'black', 'white_accuracy', 'black_accuracy'],
+  },
 };
 
 export const CHESS_PROJECTS: any[] = [CHESS_PROJECT];
