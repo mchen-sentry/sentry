@@ -6,6 +6,7 @@ FROM node:24-slim AS spa
 WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* .npmrc* ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN NODE_OPTIONS="--max-old-space-size=6144" NODE_ENV=production SENTRY_UI_DEV_ONLY=1 \
