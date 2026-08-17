@@ -75,6 +75,14 @@ All data comes from a chess-mode interception layer on the central API client
 - Minimal diffs to existing Sentry files; put new code in `static/app/chessMode/`.
 - Match Sentry's design system (use existing components: Panel, Button, theme
   tokens, `@emotion/styled`). No new npm dependencies. No network calls.
+- AMENDMENTS (orchestrator-approved, post-kickoff): `chess.js` is a sanctioned
+  dependency for the live Play tab (client-side legality/check detection; the
+  game server stays authoritative). Two sanctioned network paths exist: the
+  live-game WebSocket `wss://pawn-patrol.coder.sentry.dev/ws` (Play tab only)
+  and OpenRouter chat completions (Grandmaster Seer, only when a key is present
+  in localStorage `pawn-patrol-openrouter-key`). Everything else stays offline.
+- The user fixture deviates from the original spec on purpose: handle
+  `magnus.the.mouse` / `magnus.the.mouse@pawn-patrol.dev` (mouse-slip callback).
 - Do NOT run `git commit` (the orchestrator commits). Do not touch files owned
   by another agent. Shared file `static/app/api.tsx` is CORE-only.
 - Verify with `pnpm dev-ui` (auto-picks a free port; hit

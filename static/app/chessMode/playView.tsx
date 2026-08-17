@@ -89,16 +89,13 @@ function Lobby() {
   const [name, setName] = useState(readStoredName);
   const [joinCode, setJoinCode] = useState('');
 
-  const go = useCallback(
-    (code: string) => {
-      storeName(name.trim());
-      navigate({
-        pathname: `/organizations/${organization.slug}/play/`,
-        query: {room: code},
-      });
-    },
-    [name, navigate, organization.slug]
-  );
+  const go = (code: string) => {
+    storeName(name.trim());
+    navigate({
+      pathname: `/organizations/${organization.slug}/play/`,
+      query: {room: code},
+    });
+  };
 
   const joinDisabled = normalizeRoom(joinCode).length < 4;
 
@@ -181,7 +178,7 @@ function LiveTable({room}: LiveTableProps) {
   const {state, seat, status, error, dismissError, move, resign, rematch, claimFlag} =
     useChessSocket({room, name});
 
-  const orientation: PieceColor = seat === 'b' ? 'b' : 'w';
+  const orientation = seat === 'b' ? 'b' : 'w';
   const isPlayer = seat === 'w' || seat === 'b';
 
   // chess.js mirrors the server position so we can offer legal-move hints,
@@ -204,7 +201,7 @@ function LiveTable({room}: LiveTableProps) {
     to: string;
   } | null>(null);
 
-  const turn: PieceColor = (chess?.turn() ?? 'w') as PieceColor;
+  const turn = (chess?.turn() ?? 'w');
   const myTurn = isPlayer && seat === turn && !state?.result;
 
   // Clear any selection when the position changes under us.
@@ -247,7 +244,7 @@ function LiveTable({room}: LiveTableProps) {
       }
 
       const piece = chess.get(square as any);
-      setSelected(piece && piece.color === seat ? square : null);
+      setSelected(piece?.color === seat ? square : null);
     },
     [chess, myTurn, selected, seat, move]
   );
@@ -259,8 +256,8 @@ function LiveTable({room}: LiveTableProps) {
     }
     for (const row of chess.board()) {
       for (const cell of row) {
-        if (cell && cell.type === 'k' && cell.color === turn) {
-          return cell.square as string;
+        if (cell?.type === 'k' && cell.color === turn) {
+          return cell.square;
         }
       }
     }
@@ -284,8 +281,8 @@ function LiveTable({room}: LiveTableProps) {
     }
   }, [state, now, claimFlag]);
 
-  const topColor: PieceColor = orientation === 'w' ? 'b' : 'w';
-  const bottomColor: PieceColor = orientation;
+  const topColor = orientation === 'w' ? 'b' : 'w';
+  const bottomColor = orientation;
 
   return (
     <Stack gap="lg">
@@ -435,7 +432,7 @@ function ResultBanner({result, onRematch}: {result: string; onRematch?: () => vo
 function hashString(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i++) {
-    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+    hash = Math.trunc(hash * 31 + value.charCodeAt(i));
   }
   return hash;
 }
@@ -456,7 +453,7 @@ function TurnLine({
   if (state?.result) {
     return null;
   }
-  if (!state?.players.w || !state?.players.b) {
+  if (!state?.players.w || !state.players.b) {
     return (
       <Text size="sm" variant="muted">
         {t('Waiting for an opponent to join…')}
@@ -517,7 +514,7 @@ function MoveSheet({history}: {history: Array<{san: string}>}) {
     );
   }
 
-  const rows: Array<{black?: string; number: number; white?: string}> = [];
+  const rows: Array<{number: number; black?: string; white?: string}> = [];
   history.forEach((mv, index) => {
     const moveNumber = Math.floor(index / 2) + 1;
     if (index % 2 === 0) {
@@ -622,10 +619,7 @@ const SeatSwatch = styled('span')<{isWhite: boolean}>`
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  background: ${p =>
-    p.isWhite
-      ? p.theme.tokens.content.onVibrant.light
-      : p.theme.tokens.content.onVibrant.dark};
+  background: ${p => (p.isWhite ? '#f4f2f8' : '#17141f')};
   border: 1px solid ${p => p.theme.tokens.border.primary};
 `;
 

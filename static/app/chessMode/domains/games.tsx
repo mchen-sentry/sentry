@@ -39,36 +39,38 @@ type ChessUser = {
   username: string;
 };
 
+// id 1 must stay in sync with CHESS_USER in chessMode/fixtures.tsx — it is the
+// logged-in user, so `assigned:me` and the sidebar avatar depend on it.
 const USERS: ChessUser[] = [
   {
     id: '1',
     name: 'Magnus Sentry',
-    username: 'magnus',
+    username: 'magnus.the.mouse',
     email: 'magnus.the.mouse@pawn-patrol.dev',
   },
   {
     id: '2',
     name: 'Hikaru Nakamonitor',
-    username: 'hikaru',
-    email: 'hikaru@pawn-patrol.dev',
+    username: 'hikaru.nakamonitor',
+    email: 'hikaru.nakamonitor@pawn-patrol.dev',
   },
   {
     id: '3',
     name: 'Judit Polgarbage-Collector',
-    username: 'judit',
-    email: 'judit@pawn-patrol.dev',
+    username: 'judit.polgarbage',
+    email: 'judit.polgarbage@pawn-patrol.dev',
   },
   {
     id: '4',
     name: 'Bobby Fisherman',
-    username: 'bobby',
-    email: 'bobby@pawn-patrol.dev',
+    username: 'bobby.fisherman',
+    email: 'bobby.fisherman@pawn-patrol.dev',
   },
   {
     id: '5',
     name: 'Ding Liren-Timeout',
-    username: 'ding',
-    email: 'ding@pawn-patrol.dev',
+    username: 'ding.liren.timeout',
+    email: 'ding.liren.timeout@pawn-patrol.dev',
   },
 ];
 
@@ -1047,6 +1049,7 @@ function buildGame(seed: GameSeed, i: number) {
     eval_band: criticalPly.evalBand,
     time_pressure: criticalPly.timePressure,
     color: criticalPly.color,
+    grade: criticalPly.grade,
   };
 
   return {

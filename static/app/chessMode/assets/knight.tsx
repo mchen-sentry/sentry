@@ -22,6 +22,26 @@ export const KNIGHT_BASE_PATH =
 export const KNIGHT_HEAD_PATH =
   'M24.8 27 Q24.6 20 23.4 15.6 Q22.6 12.4 20.8 10.6 L22.9 3.5 L18.2 7.1 Q15.8 5.4 13.2 5.7 Q10.7 6 8.7 7.8 L4.7 11.8 Q2.4 13.6 2.9 14.6 Q3.4 15.8 5.7 15.9 L10.6 14.8 Q12.4 15.7 12.1 17.3 Q11.3 19.2 11.1 21.2 Q11 23.6 12.8 25.2 Q14 26.2 14.1 27 Z';
 
+/**
+ * The mark as a self-contained data URI, for places that need an image URL
+ * rather than a React node — notably the org avatar, which only escapes its
+ * derived letter-avatar colour when `avatarType` is `'upload'`.
+ *
+ * Built from the paths above rather than pasted as a blob, so the artwork has
+ * exactly one source. URL-encoded rather than base64 so it stays readable in
+ * devtools, and no network request is involved either way.
+ */
+export const KNIGHT_AVATAR_DATA_URI: string = `data:image/svg+xml,${encodeURIComponent(
+  [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${KNIGHT_VIEWBOX}" width="64" height="64">`,
+    '<rect width="32" height="32" rx="7" fill="#6C5FC7"/>',
+    '<g fill="#ffffff">',
+    `<path d="${KNIGHT_BASE_PATH}"/>`,
+    `<path d="${KNIGHT_HEAD_PATH}"/>`,
+    '</g></svg>',
+  ].join('')
+)}`;
+
 interface KnightMarkProps {
   className?: string;
   height?: string;

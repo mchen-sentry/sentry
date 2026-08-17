@@ -25,6 +25,20 @@ import {t} from 'sentry/locale';
 import {useCopyToClipboard} from 'sentry/utils/useCopyToClipboard';
 import {useOrganization} from 'sentry/utils/useOrganization';
 import {useParams} from 'sentry/utils/useParams';
+import type {
+  BoardSquares,
+  SquareHighlight,
+} from 'sentry/chessMode/components/chessBoard';
+import {
+  applyMove,
+  BoardFrame,
+  BoardRow,
+  ChessBoard,
+  EvalBar,
+  materialBalance,
+  squareIndex,
+  startingBoard,
+} from 'sentry/chessMode/components/chessBoard';
 import type {ChessGame, MoveSeverity} from 'sentry/chessMode/domains/replays';
 import {
   CHESS_GAMES,
@@ -45,23 +59,6 @@ import {TopBar} from 'sentry/views/navigation/topBar';
  * the only logic here is applying a move to a board array.
  */
 
-const FILES = 'abcdefgh';
-
-/**
- * Both colours use the solid ("black") glyphs and are told apart by fill. The
- * hollow white glyphs wash out against a coloured square.
- */
-const PIECE_GLYPH: Record<string, string> = {
-  k: '♚',
-  q: '♛',
-  r: '♜',
-  b: '♝',
-  n: '♞',
-  p: '♟',
-};
-
-const PIECE_VALUE: Record<string, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 0};
-
 const SPEEDS = ['0.5', '1', '2', '4'] as const;
 const BASE_MS_PER_PLY = 900;
 
@@ -71,22 +68,6 @@ type Ply = {
   san: string;
   to: number;
 };
-
-function squareIndex(name: string) {
-  return (8 - Number(name[1])) * 8 + FILES.indexOf(name[0]!);
-}
-
-function startingBoard() {
-  const board = Array.from({length: 64}, () => '.');
-  const back = 'rnbqkbnr';
-  for (let i = 0; i < 8; i++) {
-    board[i] = back[i]!;
-    board[8 + i] = 'p';
-    board[48 + i] = 'P';
-    board[56 + i] = back[i]!.toUpperCase();
-  }
-  return board;
-}
 
 function parseMoves(moves: string): Ply[] {
   return moves
@@ -104,49 +85,13 @@ function parseMoves(moves: string): Ply[] {
     });
 }
 
-function applyPly(board: string[], ply: Ply) {
-  const next = board.slice();
-  const piece = next[ply.from]!;
-  const isPawn = piece.toUpperCase() === 'P';
-  const white = piece === piece.toUpperCase();
-
-  next[ply.from] = '.';
-  next[ply.to] = ply.promo ? (white ? ply.promo : ply.promo.toLowerCase()) : piece;
-
-  // En passant: a pawn changed file onto an empty square, so the captured pawn
-  // sits beside the origin square rather than on the destination.
-  if (isPawn && ply.from % 8 !== ply.to % 8 && board[ply.to] === '.') {
-    next[Math.floor(ply.from / 8) * 8 + (ply.to % 8)] = '.';
-  }
-
-  // Castling: the king moved two files, so the rook jumps over it.
-  if (piece.toUpperCase() === 'K' && Math.abs((ply.from % 8) - (ply.to % 8)) === 2) {
-    const rank = Math.floor(ply.to / 8) * 8;
-    const kingside = ply.to % 8 === 6;
-    next[rank + (kingside ? 5 : 3)] = next[rank + (kingside ? 7 : 0)]!;
-    next[rank + (kingside ? 7 : 0)] = '.';
-  }
-
-  return next;
-}
-
-function buildPositions(plies: Ply[]) {
+function buildPositions(plies: Ply[]): BoardSquares[] {
   const positions = [startingBoard()];
   for (const ply of plies) {
-    positions.push(applyPly(positions[positions.length - 1]!, ply));
+    const previous = positions[positions.length - 1]!;
+    positions.push(applyMove(previous, ply.from, ply.to, ply.promo));
   }
   return positions;
-}
-
-/** Material balance, positive means white is up. Stands in for an engine eval. */
-function materialBalance(board: string[]) {
-  return board.reduce((total, piece) => {
-    if (piece === '.') {
-      return total;
-    }
-    const value = PIECE_VALUE[piece.toLowerCase()] ?? 0;
-    return piece === piece.toUpperCase() ? total + value : total - value;
-  }, 0);
 }
 
 function formatClock(seconds: number) {
@@ -155,88 +100,8 @@ function formatClock(seconds: number) {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-function formatEval(balance: number) {
-  if (balance === 0) {
-    return '0.0';
-  }
-  return `${balance > 0 ? '+' : '−'}${Math.abs(balance).toFixed(1)}`;
-}
-
 function moveLabel(ply: number, san: string) {
   return `${Math.ceil(ply / 2)}${ply % 2 ? '.' : '...'} ${san}`;
-}
-
-// -- board -------------------------------------------------------------------
-
-function ChessBoard({
-  board,
-  lastPly,
-  lastPlySeverity,
-  flipped,
-}: {
-  board: string[];
-  flipped: boolean;
-  lastPly: Ply | undefined;
-  lastPlySeverity: MoveSeverity | undefined;
-}) {
-  const order = useMemo(() => {
-    const indexes = Array.from({length: 64}, (_, i) => i);
-    return flipped ? indexes.reverse() : indexes;
-  }, [flipped]);
-
-  return (
-    <BoardGrid>
-      {order.map(index => {
-        const file = index % 8;
-        const rank = Math.floor(index / 8);
-        const piece = board[index]!;
-        const isDark = (file + rank) % 2 === 1;
-        const touched = lastPly && (lastPly.from === index || lastPly.to === index);
-
-        return (
-          <Square
-            key={index}
-            isDark={isDark}
-            highlight={touched ? (lastPlySeverity ? 'bad' : 'move') : undefined}
-          >
-            {file === (flipped ? 7 : 0) ? (
-              <Coordinate isDark={isDark} corner="rank">
-                {8 - rank}
-              </Coordinate>
-            ) : null}
-            {rank === (flipped ? 0 : 7) ? (
-              <Coordinate isDark={isDark} corner="file">
-                {FILES[file]}
-              </Coordinate>
-            ) : null}
-            {piece === '.' ? null : (
-              <Piece isWhite={piece === piece.toUpperCase()}>
-                {PIECE_GLYPH[piece.toLowerCase()]}
-              </Piece>
-            )}
-          </Square>
-        );
-      })}
-    </BoardGrid>
-  );
-}
-
-/**
- * The chess analogue of Sentry Replay's activity strip: white fills from the
- * bottom, black from the top, split at the current evaluation.
- */
-function EvalBar({balance}: {balance: number}) {
-  // Clamp to ±10 pawns so a lopsided endgame doesn't peg the bar flat.
-  const whiteShare = Math.max(6, Math.min(94, 50 + (balance / 10) * 44));
-
-  return (
-    <Tooltip title={t('Material balance: %s', formatEval(balance))} skipWrapper>
-      <EvalColumn aria-label={t('Material balance')}>
-        <EvalFill style={{height: `${whiteShare}%`}} />
-        <EvalReadout isLosing={balance < 0}>{formatEval(balance)}</EvalReadout>
-      </EvalColumn>
-    </Tooltip>
-  );
 }
 
 /**
@@ -470,6 +335,13 @@ export default function ChessReplayDetail() {
   const lastPly = ply > 0 ? plies[ply - 1] : undefined;
   const lastPlySeverity = ply > 0 ? severityOf(game, ply - 1) : undefined;
   const balance = materialBalance(board);
+  // The two squares the last move touched, tinted red when it was annotated.
+  const highlights: Record<number, SquareHighlight> = lastPly
+    ? {
+        [lastPly.from]: lastPlySeverity ? 'bad' : 'move',
+        [lastPly.to]: lastPlySeverity ? 'bad' : 'move',
+      }
+    : {};
   const elapsed = plies.length ? (game.duration * ply) / plies.length : 0;
   const startedAt = new Date(Date.now() - game.startedMinutesAgo * 60_000);
 
@@ -566,12 +438,7 @@ export default function ChessReplayDetail() {
                 <BoardRow>
                   <EvalBar balance={balance} />
                   <BoardFrame>
-                    <ChessBoard
-                      board={board}
-                      lastPly={lastPly}
-                      lastPlySeverity={lastPlySeverity}
-                      flipped={flipped}
-                    />
+                    <ChessBoard board={board} highlights={highlights} flipped={flipped} />
                   </BoardFrame>
                 </BoardRow>
 
@@ -719,128 +586,6 @@ export default function ChessReplayDetail() {
 }
 
 // -- styles ------------------------------------------------------------------
-
-const BoardRow = styled('div')`
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  max-width: 520px;
-`;
-
-const EvalColumn = styled('div')`
-  position: relative;
-  width: 16px;
-  flex: none;
-  overflow: hidden;
-  border: 1px solid ${p => p.theme.tokens.border.primary};
-  border-right: 0;
-  border-radius: ${p => p.theme.radius.xs} 0 0 ${p => p.theme.radius.xs};
-  background: ${p => p.theme.tokens.graphics.neutral.vibrant};
-
-  /* the even-material line, so the split is readable at a glance */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    border-top: 1px dashed ${p => p.theme.tokens.border.primary};
-  }
-`;
-
-/** White's share, filling from the bottom the way an engine eval bar does. */
-const EvalFill = styled('div')`
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: ${p => p.theme.tokens.background.secondary};
-  transition: height 200ms ease-out;
-`;
-
-const EvalReadout = styled('span')<{isLosing: boolean}>`
-  position: absolute;
-  left: 0;
-  right: 0;
-  ${p => (p.isLosing ? 'bottom: 2px;' : 'top: 2px;')}
-  text-align: center;
-  font-size: 9px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${p =>
-    p.isLosing ? p.theme.tokens.content.primary : p.theme.tokens.content.onVibrant.light};
-`;
-
-const BoardFrame = styled('div')`
-  flex: 1;
-  min-width: 0;
-  container-type: inline-size;
-  border: 1px solid ${p => p.theme.tokens.border.primary};
-  border-radius: 0 ${p => p.theme.radius.xs} ${p => p.theme.radius.xs} 0;
-  overflow: hidden;
-`;
-
-/**
- * Rows are explicitly `1fr` — left to `auto` they size to their content, so
- * occupied ranks inflate, empty ranks collapse, and the board reflows as
- * pieces move.
- */
-const BoardGrid = styled('div')`
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  aspect-ratio: 1;
-  width: 100%;
-`;
-
-/**
- * Surface tones, not saturated brand purple: the board covers a third of the
- * page and must not outshout the nav or the primary action. The purple is
- * spent on state (highlights) instead.
- */
-const Square = styled('div')<{isDark: boolean; highlight?: 'move' | 'bad'}>`
-  position: relative;
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  background-color: ${p =>
-    p.isDark ? p.theme.tokens.background.secondary : p.theme.tokens.background.tertiary};
-  background-image: ${p =>
-    p.isDark
-      ? 'none'
-      : `linear-gradient(${p.theme.tokens.background.transparent.accent.muted}, ${p.theme.tokens.background.transparent.accent.muted})`};
-  border: 3px solid
-    ${p =>
-      p.highlight === 'bad'
-        ? p.theme.tokens.border.danger.vibrant
-        : p.highlight === 'move'
-          ? p.theme.tokens.border.warning.vibrant
-          : 'transparent'};
-`;
-
-const Piece = styled('span')<{isWhite: boolean}>`
-  font-size: 8cqw;
-  line-height: 1;
-  user-select: none;
-  color: ${p =>
-    p.isWhite ? p.theme.tokens.content.onVibrant.light : p.theme.tokens.content.onVibrant.dark};
-  -webkit-text-stroke: 1px
-    ${p => (p.isWhite ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.85)')};
-`;
-
-/** Labels take the opposite square's colour so they read on both. */
-const Coordinate = styled('span')<{corner: 'rank' | 'file'; isDark: boolean}>`
-  position: absolute;
-  ${p => (p.corner === 'rank' ? 'top: 3px; left: 4px;' : 'bottom: 2px; right: 4px;')}
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.7;
-  pointer-events: none;
-  color: ${p =>
-    p.isDark ? p.theme.tokens.content.secondary : p.theme.tokens.content.primary};
-`;
 
 const ScrubberStack = styled('div')`
   position: relative;

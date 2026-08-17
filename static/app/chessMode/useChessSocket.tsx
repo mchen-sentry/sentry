@@ -97,7 +97,7 @@ export function useChessSocket({room, name}: UseChessSocketOptions) {
     if (!room) {
       setStatus('idle');
       setState(null);
-      return undefined;
+      return;
     }
 
     let disposed = false;
@@ -232,7 +232,7 @@ export function useTickingNow(running: boolean): number {
   useEffect(() => {
     if (!running) {
       setNow(Date.now());
-      return undefined;
+      return;
     }
     const id = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(id);

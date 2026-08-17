@@ -87,7 +87,7 @@ export function PlayBoard({
 }: PlayBoardProps) {
   const squares = useMemo(() => {
     const all = squaresFromFen(fen);
-    return orientation === 'w' ? all : [...all].reverse();
+    return orientation === 'w' ? all : all.toReversed();
   }, [fen, orientation]);
 
   const targets = useMemo(() => new Set(legalTargets), [legalTargets]);

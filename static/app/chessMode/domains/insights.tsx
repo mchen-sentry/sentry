@@ -208,7 +208,7 @@ function listItem(id: string, title: string, owner: string, daysAgo: number) {
 }
 
 const DASHBOARD_LIST = [
-  listItem(DASHBOARD_ID, DASHBOARD_TITLE, 'magnus.sentry', 30),
+  listItem(DASHBOARD_ID, DASHBOARD_TITLE, 'magnus.the.mouse', 30),
   ...OTHER_DASHBOARDS.map(([id, title, owner], index) =>
     listItem(id, title, owner, 3 + index * 11)
   ),
@@ -308,7 +308,7 @@ const PLAYER_ROWS = [
   ['zugzwang.zoe', 118, 1.8],
   ['rook.rollins', 104, 1.5],
   ['queen.mate', 96, 1.2],
-  ['magnus.sentry', 92, 0.6],
+  ['magnus.the.mouse', 92, 0.6],
 ] as const;
 
 function tableResponse(fields: string[]) {

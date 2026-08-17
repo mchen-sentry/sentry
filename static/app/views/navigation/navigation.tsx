@@ -14,6 +14,7 @@ import {
   IconCompass,
   IconDashboard,
   IconGraph,
+  IconGrid,
   IconIssues,
   IconSettings,
   IconSiren,
@@ -188,7 +189,7 @@ export function PrimaryNavigationItems({listRef}: PrimaryNavigationItemsProps) {
           label={t('Play')}
           {...makeNavigationItemProps('issues', `/${prefix}/play/`)}
         >
-          <KnightMark height="20px" />
+          <IconGrid />
         </PrimaryNavigation.Link>
       </PrimaryNavigation.ListItem>
 

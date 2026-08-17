@@ -123,7 +123,7 @@ export const CHESS_GAMES: ChessGame[] = [
   {
     id: '7b21c0f4e1a4429e9d1f3c8a6b5d2e01',
     roomCode: 'A4V2EG',
-    white: 'magnus.sentry',
+    white: 'magnus.the.mouse',
     black: 'duke.karl',
     opening: 'Philidor Defense',
     eco: 'C41',
@@ -199,7 +199,7 @@ export const CHESS_GAMES: ChessGame[] = [
     id: 'e04d7b93a256418cbf3901d7e6c58a24',
     roomCode: 'N3PL8W',
     white: 'castle.jenkins',
-    black: 'magnus.sentry',
+    black: 'magnus.the.mouse',
     opening: 'Grünfeld Defense',
     eco: 'D97',
     timeControl: 'Classical',
@@ -324,7 +324,7 @@ export const CHESS_GAMES: ChessGame[] = [
     id: '3e58d1a704f94b62ae83c05f7b6d29e1',
     roomCode: 'R8WM3P',
     white: 'knight.watch',
-    black: 'magnus.sentry',
+    black: 'magnus.the.mouse',
     opening: 'Queen\'s Gambit Declined',
     eco: 'D02',
     timeControl: 'Classical',
@@ -348,7 +348,7 @@ export const CHESS_GAMES: ChessGame[] = [
   {
     id: 'd2470b8e91a34c65f0d3a7c86e15b934',
     roomCode: 'T6HD5J',
-    white: 'magnus.sentry',
+    white: 'magnus.the.mouse',
     black: 'gambit.greer',
     opening: 'Philidor Defense',
     eco: 'C41',
@@ -372,16 +372,23 @@ export const CHESS_GAMES: ChessGame[] = [
   },
 ];
 
-export function findGame(replayId: string): ChessGame | undefined {
-  return CHESS_GAMES.find(game => game.id === replayId);
+/**
+ * Resolves a replay id OR a room code. Issues carry the room code as their
+ * stable key, so a link built from an issue tag lands on the right game
+ * without either side having to translate ids.
+ */
+export function findGame(replayIdOrRoom: string): ChessGame | undefined {
+  const needle = replayIdOrRoom.toUpperCase();
+  return CHESS_GAMES.find(
+    game => game.id === replayIdOrRoom || game.roomCode === needle
+  );
 }
 
 const MINUTE = 60 * 1000;
 
-/** The org's environments are the time controls, and Bullet rides along with Blitz. */
+/** The org's environments are the four time controls, lowercased. */
 function environmentFor(timeControl: string) {
-  const lower = timeControl.toLowerCase();
-  return lower === 'bullet' ? 'blitz' : lower;
+  return timeControl.toLowerCase();
 }
 
 /** Base time + increment, so the OS column's "version" reads like a clock. */
@@ -404,7 +411,7 @@ function toReplayRecord(game: ChessGame) {
     browser: {name: game.opening, version: game.eco},
     os: {name: game.timeControl, version: CLOCK[game.timeControl] ?? '10+0'},
     device: {brand: null, family: null, model_id: null, name: null},
-    sdk: {name: 'pawn-patrol.javascript', version: '9.4.1'},
+    sdk: {name: 'pawn-patrol.engine', version: '9.4.1'},
     user: {
       display_name: game.white,
       email: `${game.white}@pawn-patrol.dev`,
@@ -435,7 +442,7 @@ function toReplayRecord(game: ChessGame) {
     releases: [`${game.opening.toLowerCase().replace(/[^a-z]+/g, '-')}@${game.eco}`],
     environment: environmentFor(game.timeControl),
     dist: null,
-    platform: 'javascript',
+    platform: 'other',
     replay_type: 'session',
     ota_updates: {channel: '', runtime_version: '', update_id: ''},
     has_viewed: game.startedMinutesAgo > 600,
@@ -498,9 +505,11 @@ const routes: ChessRoute[] = [
   },
   {
     // Single replay record (detail header, issue-detail replay previews).
+    // Accepts a room code as well as a replay id.
     url: /\/organizations\/[^/]+\/replays\/[0-9a-zA-Z-]+\/(\?.*)?$/,
     handler: (url: string) => {
-      const record = RECORDS.find(r => r.id === replayIdFromUrl(url)) ?? RECORDS[0];
+      const game = findGame(replayIdFromUrl(url));
+      const record = RECORDS.find(r => r.id === game?.id) ?? RECORDS[0];
       return {data: record};
     },
   },
@@ -517,8 +526,14 @@ const routes: ChessRoute[] = [
   },
   {
     // "N replays" counts shown on issues.
+    // "N replays" badge on issues. The query carries the issue ids as
+    // `issue.id:[1,2,3]`; every finished game has exactly one recording.
     url: /\/organizations\/[^/]+\/replay-count\/(\?.*)?$/,
-    handler: () => ({}),
+    handler: url => {
+      const query = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('query');
+      const ids = query?.match(/\d+/g) ?? [];
+      return Object.fromEntries(ids.map(id => [id, 1]));
+    },
   },
   {
     // rrweb recording segments. Nothing to serve: the detail route is taken
