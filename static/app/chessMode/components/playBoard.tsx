@@ -1,15 +1,14 @@
 import {useMemo} from 'react';
-import styled from '@emotion/styled';
 
 import {
   BoardFrame,
+  boardFromFen,
   BoardRow,
   ChessBoard,
   EvalBar,
   materialBalance,
   squareIndex,
   squareName,
-  type BoardSquares,
   type SquareHighlight,
 } from 'sentry/chessMode/components/chessBoard';
 import type {PieceColor} from 'sentry/chessMode/useChessSocket';
@@ -23,34 +22,6 @@ import type {PieceColor} from 'sentry/chessMode/useChessSocket';
  * translates square names to indices at the boundary, so everything above it
  * can keep speaking algebraic notation like chess.js and the wire format do.
  */
-
-/**
- * Expand a FEN's placement field into a 64-entry board (index 0 = a8).
- *
- * The shared module builds boards by applying moves from the starting
- * position, which suits a replay walking its own move list. A live table gets
- * an authoritative FEN on every broadcast, and re-deriving the position from
- * history would risk drifting away from what the server actually thinks.
- */
-export function boardFromFen(fen: string): BoardSquares {
-  const board = Array.from({length: 64}, () => '.');
-  const placement = fen.split(' ')[0] ?? '';
-  let index = 0;
-
-  for (const char of placement) {
-    if (char === '/') {
-      continue;
-    }
-    if (/\d/.test(char)) {
-      index += Number(char);
-      continue;
-    }
-    board[index] = char;
-    index += 1;
-  }
-
-  return board;
-}
 
 interface PlayBoardProps {
   fen: string;
@@ -99,7 +70,7 @@ export function PlayBoard({
   }, [lastMove, legalTargets, selected, checkSquare]);
 
   return (
-    <PlayBoardRow>
+    <BoardRow maxWidth={`${PLAY_BOARD_MAX_WIDTH}px`}>
       <EvalBar balance={materialBalance(board)} />
       <BoardFrame>
         <ChessBoard
@@ -109,17 +80,13 @@ export function PlayBoard({
           onSquareClick={index => onSelect(squareName(index))}
         />
       </BoardFrame>
-    </PlayBoardRow>
+    </BoardRow>
   );
 }
 
 /**
- * The shared `BoardRow` caps at 520px, which suits the replay detail page where
- * the board is one panel among several. Here the board is the whole point, so
- * it gets more room. Extended rather than edited so replays keeps its own size.
+ * The shared default of 520px suits the replay detail page, where the board is
+ * one panel among several. Here it is the whole page, so it gets more room.
+ * The seat rows above and below match this so the clocks line up with the board.
  */
 export const PLAY_BOARD_MAX_WIDTH = 620;
-
-const PlayBoardRow = styled(BoardRow)`
-  max-width: ${PLAY_BOARD_MAX_WIDTH}px;
-`;
