@@ -1,65 +1,55 @@
 import {useMemo} from 'react';
 import styled from '@emotion/styled';
 
+import {
+  BoardFrame,
+  BoardRow,
+  ChessBoard,
+  EvalBar,
+  materialBalance,
+  squareIndex,
+  squareName,
+  type BoardSquares,
+  type SquareHighlight,
+} from 'sentry/chessMode/components/chessBoard';
 import type {PieceColor} from 'sentry/chessMode/useChessSocket';
 
 /**
- * Interactive board for the Play tab.
+ * The Play tab's board.
  *
- * Deliberately a sibling of `chessReplayDetail`'s read-only board rather than a
- * fork of it: the square palette, piece treatment and coordinate labels are
- * matched so Play and Replays read as one product, but this one owns selection,
- * legal-move dots and click-to-move, which a replay board has no use for.
+ * Rendering lives in REPLAYS' shared `chessBoard` primitives so Play and
+ * Replays stay pixel-identical; this file is only the adapter between them and
+ * live game state. It converts the server's FEN into their 64-entry board and
+ * translates square names to indices at the boundary, so everything above it
+ * can keep speaking algebraic notation like chess.js and the wire format do.
  */
 
-const PIECE_GLYPH: Record<string, string> = {
-  k: '♚',
-  q: '♛',
-  r: '♜',
-  b: '♝',
-  n: '♞',
-  p: '♟',
-};
-
-const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-
-export interface BoardSquare {
-  /** Lowercase piece letter, or null for an empty square. */
-  piece: string | null;
-  square: string;
-  isWhite?: boolean;
-}
-
-/** Expand a FEN's placement field into 64 squares, a8 first. */
-export function squaresFromFen(fen: string): BoardSquare[] {
+/**
+ * Expand a FEN's placement field into a 64-entry board (index 0 = a8).
+ *
+ * The shared module builds boards by applying moves from the starting
+ * position, which suits a replay walking its own move list. A live table gets
+ * an authoritative FEN on every broadcast, and re-deriving the position from
+ * history would risk drifting away from what the server actually thinks.
+ */
+export function boardFromFen(fen: string): BoardSquares {
+  const board = Array.from({length: 64}, () => '.');
   const placement = fen.split(' ')[0] ?? '';
-  const out: BoardSquare[] = [];
-  let rank = 8;
-  let fileIndex = 0;
+  let index = 0;
 
   for (const char of placement) {
     if (char === '/') {
-      rank -= 1;
-      fileIndex = 0;
       continue;
     }
     if (/\d/.test(char)) {
-      const empties = Number(char);
-      for (let i = 0; i < empties; i++) {
-        out.push({square: `${FILES[fileIndex]}${rank}`, piece: null});
-        fileIndex += 1;
-      }
+      index += Number(char);
       continue;
     }
-    out.push({
-      square: `${FILES[fileIndex]}${rank}`,
-      piece: char.toLowerCase(),
-      isWhite: char === char.toUpperCase(),
-    });
-    fileIndex += 1;
+    board[index] = char;
+    index += 1;
   }
 
-  return out;
+  return board;
 }
 
 interface PlayBoardProps {
@@ -71,7 +61,7 @@ interface PlayBoardProps {
   orientation: PieceColor;
   /** Square of the king in check, if any. */
   checkSquare?: string | null;
-  /** The move just played, highlighted from/to. */
+  /** The move just played. */
   lastMove?: {from: string; to: string} | null;
   selected?: string | null;
 }
@@ -85,150 +75,51 @@ export function PlayBoard({
   checkSquare,
   onSelect,
 }: PlayBoardProps) {
-  const squares = useMemo(() => {
-    const all = squaresFromFen(fen);
-    return orientation === 'w' ? all : all.toReversed();
-  }, [fen, orientation]);
+  const board = useMemo(() => boardFromFen(fen), [fen]);
 
-  const targets = useMemo(() => new Set(legalTargets), [legalTargets]);
+  const highlights = useMemo(() => {
+    const out: Record<number, SquareHighlight> = {};
+    // Assigned weakest first so the more urgent role wins the square: the last
+    // move is context, the piece you are holding and its destinations are the
+    // current interaction, and a king in check outranks all of it.
+    if (lastMove) {
+      out[squareIndex(lastMove.from)] = 'move';
+      out[squareIndex(lastMove.to)] = 'move';
+    }
+    for (const target of legalTargets) {
+      out[squareIndex(target)] = 'target';
+    }
+    if (selected) {
+      out[squareIndex(selected)] = 'select';
+    }
+    if (checkSquare) {
+      out[squareIndex(checkSquare)] = 'bad';
+    }
+    return out;
+  }, [lastMove, legalTargets, selected, checkSquare]);
 
   return (
-    <BoardFrame>
-      <BoardGrid>
-        {squares.map(({square, piece, isWhite}) => {
-          const file = square.charCodeAt(0) - 97;
-          const rank = Number(square[1]);
-          const isDark = (file + rank) % 2 === 0;
-          const isTarget = targets.has(square);
-
-          return (
-            <Square
-              key={square}
-              isDark={isDark}
-              isSelected={selected === square}
-              isLastMove={lastMove?.from === square || lastMove?.to === square}
-              isCheck={checkSquare === square}
-              onClick={() => onSelect(square)}
-              aria-label={piece ? `${square} ${piece}` : square}
-            >
-              {rank === (orientation === 'w' ? 1 : 8) && (
-                <Coordinate corner="file" isDark={isDark}>
-                  {square[0]}
-                </Coordinate>
-              )}
-              {file === (orientation === 'w' ? 0 : 7) && (
-                <Coordinate corner="rank" isDark={isDark}>
-                  {rank}
-                </Coordinate>
-              )}
-              {piece && <Piece isWhite={Boolean(isWhite)}>{PIECE_GLYPH[piece]}</Piece>}
-              {isTarget && (piece ? <CaptureRing /> : <MoveDot />)}
-            </Square>
-          );
-        })}
-      </BoardGrid>
-    </BoardFrame>
+    <PlayBoardRow>
+      <EvalBar balance={materialBalance(board)} />
+      <BoardFrame>
+        <ChessBoard
+          board={board}
+          flipped={orientation === 'b'}
+          highlights={highlights}
+          onSquareClick={index => onSelect(squareName(index))}
+        />
+      </BoardFrame>
+    </PlayBoardRow>
   );
 }
 
-const BoardFrame = styled('div')`
-  container-type: inline-size;
-  width: 100%;
-  border: 1px solid ${p => p.theme.tokens.border.primary};
-  border-radius: ${p => p.theme.radius.md};
-  overflow: hidden;
-`;
-
 /**
- * Rows are explicitly `1fr`. Left to `auto` they size to their content, so
- * occupied ranks inflate and empty ranks collapse as pieces move.
+ * The shared `BoardRow` caps at 520px, which suits the replay detail page where
+ * the board is one panel among several. Here the board is the whole point, so
+ * it gets more room. Extended rather than edited so replays keeps its own size.
  */
-const BoardGrid = styled('div')`
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  aspect-ratio: 1;
-  width: 100%;
-`;
+export const PLAY_BOARD_MAX_WIDTH = 620;
 
-/**
- * Surface tones rather than saturated brand purple: the board is the largest
- * thing on the page and must not outshout the nav or the primary action. The
- * purple is spent on state — selection and the last move.
- */
-const Square = styled('div')<{
-  isCheck: boolean;
-  isDark: boolean;
-  isLastMove: boolean;
-  isSelected: boolean;
-}>`
-  position: relative;
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  cursor: pointer;
-  background-color: ${p =>
-    p.isDark ? p.theme.tokens.background.secondary : p.theme.tokens.background.tertiary};
-  background-image: ${p =>
-    p.isDark
-      ? 'none'
-      : `linear-gradient(${p.theme.tokens.background.transparent.accent.muted}, ${p.theme.tokens.background.transparent.accent.muted})`};
-  border: 3px solid
-    ${p =>
-      p.isCheck
-        ? p.theme.tokens.border.danger.vibrant
-        : p.isSelected || p.isLastMove
-          ? p.theme.tokens.border.accent.vibrant
-          : 'transparent'};
-
-  &:hover {
-    filter: brightness(1.12);
-  }
-`;
-
-const Piece = styled('span')<{isWhite: boolean}>`
-  font-size: 8cqw;
-  line-height: 1;
-  user-select: none;
-  pointer-events: none;
-  color: ${p =>
-    p.isWhite
-      ? p.theme.tokens.content.onVibrant.light
-      : p.theme.tokens.content.onVibrant.dark};
-  -webkit-text-stroke: 1px
-    ${p => (p.isWhite ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.85)')};
-`;
-
-/** Empty legal destination. */
-const MoveDot = styled('span')`
-  position: absolute;
-  width: 22%;
-  height: 22%;
-  border-radius: 50%;
-  pointer-events: none;
-  background: ${p => p.theme.tokens.graphics.accent.vibrant};
-  opacity: 0.55;
-`;
-
-/** Occupied legal destination — a ring, so the piece stays readable. */
-const CaptureRing = styled('span')`
-  position: absolute;
-  inset: 6%;
-  border-radius: 50%;
-  pointer-events: none;
-  border: 4px solid ${p => p.theme.tokens.graphics.accent.vibrant};
-  opacity: 0.65;
-`;
-
-const Coordinate = styled('span')<{corner: 'file' | 'rank'; isDark: boolean}>`
-  position: absolute;
-  ${p => (p.corner === 'rank' ? 'top: 3px; left: 4px;' : 'bottom: 2px; right: 4px;')}
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.7;
-  pointer-events: none;
-  color: ${p =>
-    p.isDark ? p.theme.tokens.content.secondary : p.theme.tokens.content.primary};
+const PlayBoardRow = styled(BoardRow)`
+  max-width: ${PLAY_BOARD_MAX_WIDTH}px;
 `;

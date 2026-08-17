@@ -8,6 +8,7 @@
  * Other chess-mode domains should import from here rather than inventing their
  * own org/project/user so everything is consistent.
  */
+import {KNIGHT_AVATAR_DATA_URI} from 'sentry/chessMode/assets/knight';
 import type {Config} from 'sentry/types/system';
 
 export const CHESS_ORG_SLUG = 'pawn-patrol';
@@ -290,7 +291,17 @@ export const CHESS_ORG: any = {
   autoOpenPrs: false,
   attachmentsRole: 'member',
   availableRoles: [],
-  avatar: {avatarType: 'default', avatarUuid: null, avatarUrl: null},
+  // A letter avatar would be purple: organizationAvatar derives the swatch from
+  // `hashIdentifier(slug) % 10`, and `pawn-patrol` lands on the shade next to
+  // the active-nav purple, so the chip reads as permanently selected. An
+  // `upload` avatar with a data URI skips the letter avatar entirely and costs
+  // no network request. The URI is built from the same paths as the rail mark,
+  // so redrawing the knight updates both.
+  avatar: {
+    avatarType: 'upload',
+    avatarUuid: 'pawn-patrol',
+    avatarUrl: KNIGHT_AVATAR_DATA_URI,
+  },
   dataScrubber: false,
   dataScrubberDefaults: false,
   dateCreated: '2024-01-01T00:00:00.000Z',

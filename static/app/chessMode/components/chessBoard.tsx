@@ -69,6 +69,35 @@ export function startingBoard(): BoardSquares {
 }
 
 /**
+ * Reads the placement field of a FEN into a board. Ranks run 8 down to 1 and
+ * files a through h, which is this module's index order, so placement maps
+ * straight across.
+ *
+ * Use this rather than replaying moves whenever you hold an authoritative
+ * position — a live game gets a fresh FEN on every server broadcast, and
+ * re-deriving from history risks drifting from what the server believes.
+ */
+export function boardFromFen(fen: string): BoardSquares {
+  const board = Array.from({length: 64}, () => '.');
+  const placement = fen.split(' ')[0] ?? '';
+  let index = 0;
+
+  for (const char of placement) {
+    if (char === '/') {
+      continue;
+    }
+    if (/\d/.test(char)) {
+      index += Number(char);
+      continue;
+    }
+    board[index] = char;
+    index += 1;
+  }
+
+  return board;
+}
+
+/**
  * Applies a move to a board and returns a new one. Castling and en passant are
  * inferred from the piece and the geometry, so callers only need from/to plus
  * a promotion piece where relevant.
@@ -199,12 +228,16 @@ export function EvalBar({balance}: {balance: number}) {
 
 // -- styles ------------------------------------------------------------------
 
-/** Wraps `EvalBar` + `BoardFrame` side by side. */
-export const BoardRow = styled('div')`
+/**
+ * Wraps `EvalBar` + `BoardFrame` side by side. `maxWidth` is per-page: a board
+ * sharing a panel with other content wants the default, a board that IS the
+ * page wants more.
+ */
+export const BoardRow = styled('div')<{maxWidth?: string}>`
   display: flex;
   align-items: stretch;
   width: 100%;
-  max-width: 520px;
+  max-width: ${p => p.maxWidth ?? '520px'};
 `;
 
 /**
