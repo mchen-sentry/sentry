@@ -13,7 +13,6 @@ class AdoptionManager:
     def __init__(self):
         self._id_registry = {}
         self._slug_registry = {}
-        self._integration_slugs = defaultdict(set)
         self._location_slugs = defaultdict(set)
         self._slugs = set()
         self._ids = set()
@@ -27,9 +26,6 @@ class AdoptionManager:
         self._slugs.add(slug)
         self._ids.add(id)
         self._location_slugs[location].add(slug)
-
-        if location == "integration":
-            self._integration_slugs[prerequisite[0]].add(slug)
 
     def get_by_id(self, id):
         try:
@@ -48,6 +44,3 @@ class AdoptionManager:
 
     def location_slugs(self, location):
         return self._location_slugs[location]
-
-    def integration_slugs(self, language):
-        return self._integration_slugs[language]
