@@ -41,7 +41,6 @@ from .integration_failed_to_fetch_commit_context import *  # noqa: F401,F403
 from .integration_pipeline_step import *  # noqa: F401,F403
 from .integration_serverless_setup import *  # noqa: F401,F403
 from .internal_integration_created import *  # noqa: F401,F403
-from .issue_alert_fired import *  # noqa: F401,F403
 from .issue_archived import *  # noqa: F401,F403
 from .issue_assigned import *  # noqa: F401,F403
 from .issue_auto_resolved import *  # noqa: F401,F403
