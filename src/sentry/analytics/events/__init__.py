@@ -75,7 +75,6 @@ from .pr_metrics_events import *  # noqa: F401,F403
 from .project_created import *  # noqa: F401,F403
 from .project_issue_searched import *  # noqa: F401,F403
 from .project_transferred import *  # noqa: F401,F403
-from .quick_trace_connected_services import *  # noqa: F401,F403
 from .release_created import *  # noqa: F401,F403
 from .release_get_previous_commits import *  # noqa: F401,F403
 from .release_set_commits import *  # noqa: F401,F403
