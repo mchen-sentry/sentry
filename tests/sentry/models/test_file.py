@@ -84,7 +84,7 @@ class FileBlobOrphanTest(TestCase):
     def _spy_unique_path(self, captured: list[str]):
         # Wrap `FileBlob.generate_unique_path` so every generated path is
         # recorded in `captured` while still using the real implementation.
-        original = FileBlob.generate_unique_path.__func__
+        original = FileBlob.generate_unique_path.__func__  # type: ignore[attr-defined]
 
         def spy_generate_unique_path(cls):
             path = original(cls)
