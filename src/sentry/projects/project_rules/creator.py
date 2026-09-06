@@ -29,6 +29,7 @@ class ProjectRuleCreator:
     filter_match: str | None = None
     source: RuleSource | None = RuleSource.ISSUE
     request: Request | None = None
+    user_id: int | None = None
 
     def run(self) -> Rule:
         ensure_default_detectors(self.project)
@@ -37,9 +38,8 @@ class ProjectRuleCreator:
             self.rule = self._create_rule()
 
             # uncaught errors will rollback the transaction
-            workflow = IssueAlertMigrator(
-                self.rule, self.request.user.id if self.request else None
-            ).run()
+            creator_id = self.request.user.id if self.request else self.user_id
+            workflow = IssueAlertMigrator(self.rule, creator_id).run()
             logger.info(
                 "workflow_engine.issue_alert.migrated",
                 extra={"rule_id": self.rule.id, "workflow_id": workflow.id},
