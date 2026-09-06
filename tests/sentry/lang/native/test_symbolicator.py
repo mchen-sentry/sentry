@@ -1,4 +1,5 @@
 import copy
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -6,6 +7,12 @@ from sentry.lang.native.sources import (
     get_sources_for_project,
     redact_internal_sources,
     reverse_aliases_map,
+)
+from sentry.lang.native.symbolicator import (
+    Symbolicator,
+    SymbolicatorFunction,
+    SymbolicatorSession,
+    SymbolicatorTaskKind,
 )
 from sentry.testutils.helpers import Feature
 from sentry.testutils.pytest.fixtures import django_db_all
@@ -252,3 +259,119 @@ class TestAliasReversion:
         reverse_aliases = reverse_aliases_map(builtin_sources)
         expected = {"sentry:ios-source": "sentry:ios", "sentry:tvos-source": "sentry:ios"}
         assert reverse_aliases == expected
+
+
+def _ok_response() -> MagicMock:
+    response = MagicMock()
+    response.status_code = 200
+    response.ok = True
+    response.json.return_value = {"status": "completed"}
+    response.content = b"{}"
+    response.text = "{}"
+    return response
+
+
+def _session_with_mocked_http(url: str) -> SymbolicatorSession:
+    session = SymbolicatorSession(url=url, project_id="1", event_id="event", timeout=1)
+    session.session = MagicMock()
+    session.session.request.return_value = _ok_response()
+    return session
+
+
+class TestSymbolicatorSessionRequestUrlBuilding:
+    def test_create_task_preserves_path_prefix(self) -> None:
+        session = _session_with_mocked_http("http://proxy:8080/symbolicator/")
+        session.create_task("symbolicate", json={"stacktraces": []})
+
+        method, url = session.session.request.call_args.args
+        assert method == "post"
+        assert url == "http://proxy:8080/symbolicator/symbolicate"
+
+    def test_query_task_preserves_path_prefix_for_polling(self) -> None:
+        session = _session_with_mocked_http("http://proxy:8080/symbolicator/")
+        session.query_task("abc-123")
+
+        method, url = session.session.request.call_args.args
+        assert method == "get"
+        assert url == "http://proxy:8080/symbolicator/requests/abc-123"
+
+    @pytest.mark.parametrize("base_url", ["http://127.0.0.1:3021", "http://127.0.0.1:3021/"])
+    def test_default_host_port_base_url_unaffected(self, base_url: str) -> None:
+        session = _session_with_mocked_http(base_url)
+        session.create_task("symbolicate", json={"stacktraces": []})
+
+        _, url = session.session.request.call_args.args
+        assert url == "http://127.0.0.1:3021/symbolicate"
+
+    def test_prefix_without_trailing_slash_replaces_last_segment_per_rfc(self) -> None:
+        session = _session_with_mocked_http("http://proxy:8080/symbolicator")
+        session.create_task("symbolicate", json={"stacktraces": []})
+
+        _, url = session.session.request.call_args.args
+        assert url == "http://proxy:8080/symbolicate"
+
+
+@django_db_all
+class TestSymbolicatorBaseUrlConstruction:
+    def _make_symbolicator(self, default_project) -> Symbolicator:
+        return Symbolicator(
+            SymbolicatorTaskKind(SymbolicatorFunction.native),
+            lambda: None,
+            default_project,
+            "00000000000000000000000000000000",
+        )
+
+    @pytest.mark.parametrize(
+        ("url", "expected_base_url"),
+        [
+            ("http://127.0.0.1:3021", "http://127.0.0.1:3021"),
+            ("http://127.0.0.1:3021/", "http://127.0.0.1:3021/"),
+            ("http://proxy:8080/symbolicator/", "http://proxy:8080/symbolicator/"),
+            ("http://proxy:8080/symbolicator", "http://proxy:8080/symbolicator"),
+        ],
+    )
+    def test_base_url_preserves_trailing_slash(
+        self, url, expected_base_url, default_project, set_sentry_option
+    ) -> None:
+        with set_sentry_option("symbolicator.options", {"url": url}):
+            symbolicator = self._make_symbolicator(default_project)
+
+        assert symbolicator.base_url == expected_base_url
+
+    @pytest.mark.parametrize("url", ["", "/", "//"])
+    def test_rejects_degenerate_url(self, url, default_project, set_sentry_option) -> None:
+        with set_sentry_option("symbolicator.options", {"url": url}):
+            with pytest.raises(AssertionError):
+                self._make_symbolicator(default_project)
+
+
+@django_db_all
+class TestSymbolicatorRequestUrlEndToEnd:
+    @pytest.fixture
+    def mock_http_session(self, monkeypatch):
+        mock_session = MagicMock()
+        mock_session.request.return_value = _ok_response()
+        import sentry.lang.native.symbolicator as sym_module
+
+        monkeypatch.setattr(sym_module, "Session", lambda *a, **kw: mock_session)
+        return mock_session
+
+    def test_process_preserves_prefix_in_request_url(
+        self, default_project, set_sentry_option, mock_http_session
+    ) -> None:
+        with set_sentry_option("symbolicator.options", {"url": "http://proxy:8080/symbolicator/"}):
+            symbolicator = Symbolicator(
+                SymbolicatorTaskKind(SymbolicatorFunction.native),
+                lambda: None,
+                default_project,
+                "00000000000000000000000000000000",
+            )
+            symbolicator._process(
+                "symbolicate_stacktraces",
+                "symbolicate",
+                json={"stacktraces": []},
+            )
+
+        method, url = mock_http_session.request.call_args.args
+        assert method == "post"
+        assert url == "http://proxy:8080/symbolicator/symbolicate"
