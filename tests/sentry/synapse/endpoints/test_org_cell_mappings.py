@@ -2,6 +2,7 @@ from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
 
+from sentry.synapse.paginator import Cursor
 from sentry.testutils.auth import generate_service_request_signature
 from sentry.testutils.cases import APITestCase
 from sentry.testutils.cell import override_cells
@@ -152,3 +153,18 @@ class OrgCellMappingsTest(APITestCase):
         assert res.data["metadata"]["cursor"]
         assert res.data["metadata"]["cell_to_locality"]
         assert res.data["metadata"]["has_more"] is False
+
+    def test_get_out_of_range_cursor_returns_400(self) -> None:
+        # A structurally-valid base64+JSON cursor whose `updated_at` is outside the
+        # representable datetime range (year >= 10000) must return a 400 ParseError,
+        # matching the existing contract for malformed cursors — not a 500.
+        self.create_organization()
+        bad_cursor = Cursor(updated_at=253_402_300_800, id=1).encode()  # year 10000
+        url = reverse("sentry-api-0-org-cell-mappings")
+        res = self.client.get(
+            url,
+            data={"cursor": bad_cursor},
+            HTTP_AUTHORIZATION=self.auth_header(url),
+        )
+        assert res.status_code == 400, f"got {res.status_code}: {res.content!r}"
+        assert res.data == {"detail": "Invalid cursor"}
