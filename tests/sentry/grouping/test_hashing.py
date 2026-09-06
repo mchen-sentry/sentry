@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import time
 from unittest.mock import MagicMock, patch
 
-from sentry.conf.server import DEFAULT_GROUPING_CONFIG
+from sentry.conf.server import DEFAULT_GROUPING_CONFIG, WINTER_2023_GROUPING_CONFIG
 from sentry.grouping.api import GroupingConfig
 from sentry.grouping.ingest.hashing import (
     _calculate_event_grouping,
@@ -203,3 +203,53 @@ class SecondaryGroupingTest(TestCase):
         # We used the known primary config, but skipped the unknown secondary one
         assert mock_calculate_primary_hashes.call_count == 1
         assert mock_calculate_secondary_hashes.call_count == 0
+
+    def test_secondary_grouping_links_python_multiprocessing_spawn_event(self) -> None:
+        # Regression test for the group-continuity bug where a Python multiprocessing-spawn event
+        # whose context_line was parameterized by the primary (FALL_2025) run failed to link to an
+        # existing group via the secondary (WINTER_2023) path, because the secondary run operated
+        # on a deepcopy whose context_line was already parameterized and the restore never fired.
+        project = self.project
+        posix_context_line = (
+            "from multiprocessing.spawn import spawn_main; "
+            "spawn_main(tracker_fd=11, pipe_handle=21)"
+        )
+        event_data = {
+            "message": "boom",
+            "platform": "python",
+            "exception": {
+                "values": [
+                    {
+                        "type": "ValueError",
+                        "stacktrace": {
+                            "frames": [
+                                {
+                                    "module": "__main__",
+                                    "filename": "<string>",
+                                    "function": "<module>",
+                                    "context_line": posix_context_line,
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+
+        # Existing group is created under WINTER_2023 (prevent flag = True, no parameterization).
+        project.update_option("sentry:grouping_config", WINTER_2023_GROUPING_CONFIG)
+        event = save_new_event(event_data, project)
+        assert event.group_id is not None
+
+        # Flip the project into a transition: primary FALL_2025 (parameterizes), secondary
+        # WINTER_2023 (must restore the original line so its hash matches the existing group).
+        project.update_option("sentry:grouping_config", DEFAULT_GROUPING_CONFIG)
+        project.update_option("sentry:secondary_grouping_config", WINTER_2023_GROUPING_CONFIG)
+        project.update_option("sentry:secondary_grouping_expiry", time() + 3600)
+
+        event2 = save_new_event(event_data, project)
+
+        # The fresh event must link to the existing group via the secondary grouphash rather than
+        # fanning out into a new issue. Pre-fix this assertion failed because the secondary run
+        # hashed the parameterized line and never matched the existing group's WINTER_2023 hash.
+        assert event2.group_id == event.group_id
