@@ -143,9 +143,7 @@ class Symbolicator:
             or URLS.get(SymbolicatorPools.default.value)
             or options.get("symbolicator.options")["url"]
         )
-        base_url = base_url.rstrip("/")
-        assert base_url
-
+        assert base_url and base_url.strip("/")
         self.base_url = base_url
         self.on_request = on_request
         self.project = project
