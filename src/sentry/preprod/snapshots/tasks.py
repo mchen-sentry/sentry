@@ -330,7 +330,11 @@ def _build_comparison_fingerprints(manifest: ComparisonManifest) -> set[ImageFin
             fingerprints.add(
                 ImageFingerprint(name, "renamed", image.head_hash, image.previous_image_file_name)
             )
-        else:
+        elif image.status == "errored":
+            if not image.head_hash:
+                continue
+            fingerprints.add(ImageFingerprint(name, "errored", image.head_hash))
+        else:  # removed (no head image exists)
             fingerprints.add(ImageFingerprint(name, image.status))
     return fingerprints
 
