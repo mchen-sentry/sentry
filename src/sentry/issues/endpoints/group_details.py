@@ -347,22 +347,11 @@ class GroupDetailsEndpoint(GroupEndpoint):
                 )
                 data.update({"sentryAppIssues": sentry_app_issues})
 
-            if "latestEventHasAttachments" in expand:
-                if not features.has(
-                    "organizations:event-attachments",
-                    group.project.organization,
-                    actor=request.user,
-                ):
-                    metrics.incr(
-                        "group.get.http_response",
-                        sample_rate=1.0,
-                        tags={
-                            "status": 404,
-                            "detail": "group_details:get:no_attachments_feature_flag",
-                        },
-                    )
-                    return self.respond(status=404)
-
+            if "latestEventHasAttachments" in expand and features.has(
+                "organizations:event-attachments",
+                group.project.organization,
+                actor=request.user,
+            ):
                 latest_event = group.get_latest_event()
                 if latest_event is not None:
                     num_attachments = EventAttachment.objects.filter(

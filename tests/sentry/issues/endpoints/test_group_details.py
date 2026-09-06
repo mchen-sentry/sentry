@@ -23,6 +23,7 @@ from sentry.models.activity import Activity
 from sentry.models.apikey import ApiKey
 from sentry.models.auditlogentry import AuditLogEntry
 from sentry.models.environment import Environment
+from sentry.models.eventattachment import EventAttachment
 from sentry.models.group import Group, GroupStatus
 from sentry.models.groupassignee import GroupAssignee
 from sentry.models.groupbookmark import GroupBookmark
@@ -39,7 +40,7 @@ from sentry.silo.base import SiloMode
 from sentry.testutils.cases import APITestCase, SnubaTestCase
 from sentry.testutils.helpers.action_log import capture_action_log
 from sentry.testutils.helpers.analytics import assert_any_analytics_event
-from sentry.testutils.helpers.datetime import freeze_time
+from sentry.testutils.helpers.datetime import before_now, freeze_time
 from sentry.testutils.helpers.features import with_feature
 from sentry.testutils.outbox import outbox_runner
 from sentry.testutils.silo import assume_test_silo_mode
@@ -402,6 +403,49 @@ class GroupDetailsTest(APITestCase, SnubaTestCase):
                 ),
             )
             assert cache.get(cache_key_for_issue_view(group.id, "mcp")) is None
+
+    def test_latest_event_has_attachments_omitted_when_flag_disabled(self) -> None:
+        # Regression: requesting expand=latestEventHasAttachments must NOT collapse the
+        # whole issue-detail response into a 404 when the event-attachments feature is
+        # off; the field should simply be omitted and the issue returned normally,
+        # mirroring the group_stream serializer.
+        self.login_as(user=self.user)
+        group = self.create_group()
+        url = f"/api/0/organizations/{group.organization.slug}/issues/{group.id}/"
+
+        with self.feature({"organizations:event-attachments": False}):
+            response = self.client.get(url, {"expand": "latestEventHasAttachments"}, format="json")
+
+        assert response.status_code == 200, response.content
+        assert "latestEventHasAttachments" not in response.data
+        assert response.data["id"] == str(group.id)
+
+    def test_latest_event_has_attachments_true_with_attachment(self) -> None:
+        self.login_as(user=self.user)
+        event = self.store_event(
+            data={
+                "fingerprint": ["group-attachments"],
+                "timestamp": before_now(minutes=1).isoformat(),
+            },
+            project_id=self.project.id,
+        )
+        group = event.group
+        EventAttachment.objects.create(
+            project_id=event.project_id,
+            event_id=event.event_id,
+            type="event.attachment",
+            name="hello.png",
+            content_type="image/png",
+            size=18,
+            sha1="d3f299af02d6abbe92dd8368bab781824a9702ed",
+        )
+
+        url = f"/api/0/organizations/{group.organization.slug}/issues/{group.id}/"
+        with self.feature("organizations:event-attachments"):
+            response = self.client.get(url, {"expand": "latestEventHasAttachments"}, format="json")
+
+        assert response.status_code == 200, response.content
+        assert response.data["latestEventHasAttachments"] is True
 
 
 class GroupDetailsReconcileStatusTest(APITestCase, SnubaTestCase):
