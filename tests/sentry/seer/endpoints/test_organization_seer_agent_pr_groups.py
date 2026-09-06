@@ -9,22 +9,22 @@ from sentry.testutils.helpers.features import with_feature
 
 
 @with_feature("organizations:seer-explorer")
+@with_feature("organizations:gen-ai-features")
 class TestOrganizationSeerAgentPRGroupsEndpoint(APITestCase):
     endpoint = "sentry-api-0-organization-seer-explorer-pr-groups"
 
     def setUp(self) -> None:
         super().setUp()
         self.organization = self.create_organization(owner=self.user)
+        self.organization.flags.allow_joinleave = True
+        self.organization.save()
         self.project = self.create_project(organization=self.organization)
         self.url = reverse(self.endpoint, args=[self.organization.slug])
         self.login_as(user=self.user)
 
-        self.seer_access_patcher = patch(
-            "sentry.seer.agent.client_utils.has_seer_agent_access_with_detail",
-            return_value=(True, None),
-        )
-        self.seer_access_patcher.start()
-
+        # Use REAL feature flags (class-level @with_feature + allow_joinleave
+        # above) so the endpoint-level has_seer_agent_access_with_detail gate
+        # is genuinely exercised. Only the Seer RPC boundary is mocked.
         self.client_patcher = patch(
             "sentry.seer.endpoints.organization_seer_agent_pr_groups.SeerAgentClient"
         )
@@ -38,7 +38,6 @@ class TestOrganizationSeerAgentPRGroupsEndpoint(APITestCase):
         self.mock_serialize = self.serialize_patcher.start()
 
     def tearDown(self) -> None:
-        self.seer_access_patcher.stop()
         self.client_patcher.stop()
         self.serialize_patcher.stop()
         super().tearDown()
@@ -326,12 +325,15 @@ class TestOrganizationSeerAgentPRGroupsEndpointAuth(APITestCase):
 
 
 @with_feature("organizations:seer-explorer")
+@with_feature("organizations:gen-ai-features")
 class TestOrganizationSeerAgentPRGroupsPermissionErrors(APITestCase):
     endpoint = "sentry-api-0-organization-seer-explorer-pr-groups"
 
     def setUp(self) -> None:
         super().setUp()
         self.organization = self.create_organization(owner=self.user)
+        self.organization.flags.allow_joinleave = True
+        self.organization.save()
         self.project = self.create_project(organization=self.organization)
         self.url = reverse(self.endpoint, args=[self.organization.slug])
         self.login_as(user=self.user)
@@ -344,3 +346,82 @@ class TestOrganizationSeerAgentPRGroupsPermissionErrors(APITestCase):
             response = self.client.get(self.url + f"?project={self.project.id}")
             assert response.status_code == 403
             assert response.data == {"detail": "Feature flag not enabled"}
+
+
+class TestOrganizationSeerAgentPRGroupsAccessGate(APITestCase):
+    """The pr-groups endpoint must gate on has_seer_agent_access_with_detail
+    (organizations:seer-explorer + allow_joinleave) before issuing any Seer RPC.
+
+    Regression coverage for the missing endpoint-level access check. These
+    tests use REAL feature flags (they never mock has_seer_agent_access_with_detail)
+    so the gate is genuinely exercised, and assert the Seer client is never
+    constructed when access is denied.
+    """
+
+    endpoint = "sentry-api-0-organization-seer-explorer-pr-groups"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.organization = self.create_organization(owner=self.user)
+        self.project = self.create_project(organization=self.organization)
+        self.url = reverse(self.endpoint, args=[self.organization.slug])
+        self.login_as(user=self.user)
+        # Mock SeerAgentClient at the RPC boundary so no real Seer request is
+        # issued; every access-denial case asserts the client is never built.
+        self.client_patcher = patch(
+            "sentry.seer.endpoints.organization_seer_agent_pr_groups.SeerAgentClient"
+        )
+        self.mock_client_class = self.client_patcher.start()
+
+    def tearDown(self) -> None:
+        self.client_patcher.stop()
+        super().tearDown()
+
+    def test_denied_without_gen_ai_features_flag(self) -> None:
+        """No flags enabled → 403 and no Seer RPC is issued."""
+        response = self.client.get(self.url + f"?project={self.project.id}")
+        assert response.status_code == 403
+        self.mock_client_class.assert_not_called()
+
+    def test_denied_without_seer_explorer_flag(self) -> None:
+        """gen-ai-features ON but seer-explorer OFF → 403 and no Seer RPC.
+
+        This is the exact org-config matrix the bypass exposed: the base
+        has_seer_access_with_detail check (gen-ai-features) passes, so relying
+        solely on SeerAgentClient.__init__ would have reached get_runs. The
+        endpoint-level has_seer_agent_access_with_detail gate must block it.
+        """
+        with self.feature({"organizations:gen-ai-features": True}):
+            response = self.client.get(self.url + f"?project={self.project.id}")
+        assert response.status_code == 403
+        assert response.data == {"detail": "Feature flag not enabled"}
+        self.mock_client_class.assert_not_called()
+
+    def test_denied_without_allow_joinleave(self) -> None:
+        """gen-ai-features + seer-explorer ON but allow_joinleave OFF → 403 and no Seer RPC."""
+        self.organization.flags.allow_joinleave = False
+        self.organization.save()
+        with self.feature(
+            {"organizations:gen-ai-features": True, "organizations:seer-explorer": True}
+        ):
+            response = self.client.get(self.url + f"?project={self.project.id}")
+        assert response.status_code == 403
+        assert "open team membership" in str(response.data)
+        self.mock_client_class.assert_not_called()
+
+    def test_allowed_when_all_gates_enabled(self) -> None:
+        """gen-ai-features + seer-explorer + allow_joinleave all ON → 200, RPC issued."""
+        self.organization.flags.allow_joinleave = True
+        self.organization.save()
+        mock_client = MagicMock()
+        mock_client.get_runs.return_value = []
+        self.mock_client_class.return_value = mock_client
+
+        with self.feature(
+            {"organizations:gen-ai-features": True, "organizations:seer-explorer": True}
+        ):
+            response = self.client.get(self.url + f"?project={self.project.id}")
+
+        assert response.status_code == 200
+        assert response.json()["data"] == []
+        self.mock_client_class.assert_called_once()
