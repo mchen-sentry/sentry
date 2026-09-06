@@ -96,6 +96,41 @@ class OrganizationOnboardingTaskEndpointTest(APITestCase):
             organization=self.org, task=OnboardingTask.FIRST_PROJECT
         ).exists()
 
+    def test_completion_seen_only_without_existing_row(self) -> None:
+        # A `completionSeen`-only POST used to raise an IntegrityError (500)
+        # because the `status` column is NOT NULL with no default and there was
+        # no existing row to update. It must now be a structured 422 with no
+        # row committed.
+        assert not OrganizationOnboardingTask.objects.filter(
+            organization=self.org, task=OnboardingTask.FIRST_PROJECT
+        ).exists()
+
+        response = self.client.post(self.path, {"task": "create_project", "completionSeen": True})
+
+        assert response.status_code == 422, response.content
+        assert response.data["detail"] == "status must be provided to create a task"
+        assert not OrganizationOnboardingTask.objects.filter(
+            organization=self.org, task=OnboardingTask.FIRST_PROJECT
+        ).exists()
+
+    def test_falsy_status_without_existing_row(self) -> None:
+        # A falsy-but-not-None `status` (e.g. "") passes the endpoint's `is None`
+        # validation and previously took the same create-without-status path,
+        # also raising an IntegrityError. It must now be a structured 422.
+        assert not OrganizationOnboardingTask.objects.filter(
+            organization=self.org, task=OnboardingTask.FIRST_PROJECT
+        ).exists()
+
+        response = self.client.post(
+            self.path, {"task": "create_project", "status": "", "completionSeen": True}
+        )
+
+        assert response.status_code == 422, response.content
+        assert response.data["detail"] == "status must be provided to create a task"
+        assert not OrganizationOnboardingTask.objects.filter(
+            organization=self.org, task=OnboardingTask.FIRST_PROJECT
+        ).exists()
+
     def test_get_tasks(self) -> None:
         # create a task
         self.client.post(self.path, {"task": "create_project", "status": "complete"})
