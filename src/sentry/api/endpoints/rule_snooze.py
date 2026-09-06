@@ -93,6 +93,10 @@ T = TypeVar("T", bound=Model)
 class BaseRuleSnoozeEndpoint(ProjectEndpoint, Generic[T]):
     permission_classes = (ProjectAlertRulePermission,)
     rule_field: str  # abstract, value comes from child class
+    # abstract, the audit log event name to record for the mute (snooze) and
+    # unmute (unsnooze) of an "everyone" rule. Per-user snoozes are not audited.
+    snooze_audit_log_event: str
+    unsnooze_audit_log_event: str
 
     def convert_args(
         self, request: Request, rule_id: str | int, *args: Any, **kwargs: Any
@@ -144,7 +148,10 @@ class BaseRuleSnoozeEndpoint(ProjectEndpoint, Generic[T]):
         if not user_id:
             # create an audit log entry if the rule is snoozed for everyone
             self.record_audit_log_entry(
-                request=request, organization=project.organization, rule=rule
+                request=request,
+                organization=project.organization,
+                rule=rule,
+                event_id=audit_log.get_event_id(self.snooze_audit_log_event),
             )
 
         try:
@@ -183,6 +190,13 @@ class BaseRuleSnoozeEndpoint(ProjectEndpoint, Generic[T]):
                 _update_workflow_engine_models(shared_snooze, is_enabled=True)
                 shared_snooze.delete()
             deletion_type = "everyone"
+            # create an audit log entry if the rule is unsnoozed for everyone
+            self.record_audit_log_entry(
+                request=request,
+                organization=project.organization,
+                rule=rule,
+                event_id=audit_log.get_event_id(self.unsnooze_audit_log_event),
+            )
 
         # next check if there is a mute for me that I can remove
         my_snooze = None
@@ -224,7 +238,7 @@ class BaseRuleSnoozeEndpoint(ProjectEndpoint, Generic[T]):
         )
 
     def record_audit_log_entry(
-        self, request: Request, organization: Organization, rule: T, **kwargs: Any
+        self, request: Request, organization: Organization, rule: T, event_id: int, **kwargs: Any
     ) -> None:
         raise NotImplementedError()
 
@@ -246,6 +260,8 @@ class RuleSnoozeEndpoint(BaseRuleSnoozeEndpoint[Rule]):
         "POST": ApiPublishStatus.PRIVATE,
     }
     rule_field = "rule"
+    snooze_audit_log_event = "RULE_SNOOZE"
+    unsnooze_audit_log_event = "RULE_UNSNOOZE"
 
     @track_alert_endpoint_execution("POST", "sentry-api-0-rule-snooze")
     @deprecated(ALERTS_API_DEPRECATION_DATE, key=ALERTS_API_DEPRECATION_KEY)
@@ -283,13 +299,13 @@ class RuleSnoozeEndpoint(BaseRuleSnoozeEndpoint[Rule]):
         return rule_snooze
 
     def record_audit_log_entry(
-        self, request: Request, organization: Organization, rule: Rule, **kwargs: Any
+        self, request: Request, organization: Organization, rule: Rule, event_id: int, **kwargs: Any
     ) -> None:
         self.create_audit_entry(
             request=request,
             organization=organization,
             target_object=rule.id,
-            event=audit_log.get_event_id("RULE_SNOOZE"),
+            event=event_id,
             data=rule.get_audit_log_data(),
             **kwargs,
         )
@@ -303,6 +319,8 @@ class MetricRuleSnoozeEndpoint(BaseRuleSnoozeEndpoint[AlertRule]):
         "POST": ApiPublishStatus.PRIVATE,
     }
     rule_field = "alert_rule"
+    snooze_audit_log_event = "ALERT_RULE_SNOOZE"
+    unsnooze_audit_log_event = "ALERT_RULE_UNSNOOZE"
 
     @track_alert_endpoint_execution("POST", "sentry-api-0-metric-rule-snooze")
     @deprecated(ALERTS_API_DEPRECATION_DATE, key=ALERTS_API_DEPRECATION_KEY)
@@ -340,13 +358,18 @@ class MetricRuleSnoozeEndpoint(BaseRuleSnoozeEndpoint[AlertRule]):
         return rule_snooze
 
     def record_audit_log_entry(
-        self, request: Request, organization: Organization, rule: AlertRule, **kwargs: Any
+        self,
+        request: Request,
+        organization: Organization,
+        rule: AlertRule,
+        event_id: int,
+        **kwargs: Any,
     ) -> None:
         self.create_audit_entry(
             request=request,
             organization=organization,
             target_object=rule.id,
-            event=audit_log.get_event_id("ALERT_RULE_SNOOZE"),
+            event=event_id,
             data=rule.get_audit_log_data(),
             **kwargs,
         )
