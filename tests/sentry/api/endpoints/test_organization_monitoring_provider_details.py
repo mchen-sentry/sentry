@@ -376,6 +376,140 @@ class OrganizationMonitoringProviderDetailsReauthenticateTest(APITestCase):
         identity.refresh_from_db()
         assert identity.data == {"access_token": "pat-new", "site": "datadoghq.eu"}
 
+    @patch("sentry.identity.datadog.provider.get_user_info")
+    def test_reauthenticate_datadog_pat_same_org_updates_in_place(
+        self, mock_get_user_info: MagicMock
+    ) -> None:
+        # Same Datadog org + user: reauth must update the existing identity in place
+        # rather than deleting/recreating it (preserves the identity row + its PK).
+        mock_get_user_info.return_value = {"user_uuid": "dd-user-123", "org_uuid": "dd-org-456"}
+        identity = self._connect_datadog_pat(site="datadoghq.com")
+        identity_id = identity.id
+
+        with self.feature("organizations:seer-infra-telemetry"):
+            response = self.get_response(
+                self.organization.slug, "datadog_pat", access_token="pat-new"
+            )
+
+        assert response.status_code == 204
+        assert (
+            OrganizationIdentity.objects.filter(
+                organization_id=self.organization.id,
+                identity__user_id=self.user.id,
+                identity__idp__type="datadog_pat",
+            ).count()
+            == 1
+        )
+        assert Identity.objects.filter(user=self.user, idp__type="datadog_pat").count() == 1
+        identity.refresh_from_db()
+        assert identity.id == identity_id
+        assert identity.data == {"access_token": "pat-new", "site": "datadoghq.com"}
+
+    @patch("sentry.identity.datadog.provider.get_user_info")
+    def test_reauthenticate_datadog_pat_different_org_replaces_connection(
+        self, mock_get_user_info: MagicMock
+    ) -> None:
+        # A reauth whose new token resolves to a *different* Datadog org must
+        # replace -- not duplicate -- the existing connection.
+        mock_get_user_info.return_value = {"user_uuid": "dd-user-555", "org_uuid": "dd-org-999"}
+        old_identity = self._connect_datadog_pat(site="datadoghq.com")
+
+        with self.feature("organizations:seer-infra-telemetry"):
+            response = self.get_response(
+                self.organization.slug, "datadog_pat", access_token="pat-new"
+            )
+
+        assert response.status_code == 204
+        # The whoami call reused the stored region.
+        mock_get_user_info.assert_called_once_with("pat-new", "https://mcp.datadoghq.com")
+        # Exactly one connection remains for this user/provider.
+        assert (
+            OrganizationIdentity.objects.filter(
+                organization_id=self.organization.id,
+                identity__user_id=self.user.id,
+                identity__idp__type="datadog_pat",
+            ).count()
+            == 1
+        )
+        assert Identity.objects.filter(user=self.user, idp__type="datadog_pat").count() == 1
+        # The stale identity row is gone.
+        assert not Identity.objects.filter(id=old_identity.id).exists()
+        # The surviving connection carries the new token and resolves to the new org.
+        new_identity = Identity.objects.get(user=self.user, idp__type="datadog_pat")
+        assert new_identity.external_id == "dd-user-555"
+        assert new_identity.idp.external_id == "dd-org-999"
+        assert new_identity.data == {"access_token": "pat-new", "site": "datadoghq.com"}
+
+    @patch("sentry.identity.datadog.provider.get_user_info", side_effect=HTTPError())
+    def test_reauthenticate_datadog_pat_invalid_token_preserves_existing_connection(
+        self, mock_get_user_info: MagicMock
+    ) -> None:
+        # A bad token must not delete the existing connection before linking fails.
+        old_identity = self._connect_datadog_pat(site="datadoghq.eu")
+
+        with self.feature("organizations:seer-infra-telemetry"):
+            response = self.get_response(
+                self.organization.slug, "datadog_pat", access_token="pat-bad"
+            )
+
+        assert response.status_code == 400
+        assert "Failed to verify token" in response.data["detail"]
+        # The existing connection is untouched.
+        assert (
+            OrganizationIdentity.objects.filter(
+                organization_id=self.organization.id,
+                identity__user_id=self.user.id,
+                identity__idp__type="datadog_pat",
+            ).count()
+            == 1
+        )
+        old_identity.refresh_from_db()
+        assert old_identity.data == {"access_token": "pat-old", "site": "datadoghq.eu"}
+
+    @patch("sentry.identity.datadog.provider.get_user_info")
+    def test_reauthenticate_datadog_pat_different_org_only_affects_requesting_user(
+        self, mock_get_user_info: MagicMock
+    ) -> None:
+        mock_get_user_info.return_value = {"user_uuid": "dd-user-555", "org_uuid": "dd-org-999"}
+        # Another user shares the same Datadog org identity provider (dd-org-456).
+        other_user = self.create_user()
+        self.create_member(organization=self.organization, user=other_user)
+        shared_idp = self.create_identity_provider(type="datadog_pat", external_id="dd-org-456")
+        my_identity = self.create_identity(
+            user=self.user,
+            identity_provider=shared_idp,
+            external_id="dd-user-123",
+            data={"access_token": "pat-mine", "site": "datadoghq.com"},
+        )
+        other_identity = self.create_identity(
+            user=other_user,
+            identity_provider=shared_idp,
+            external_id="dd-user-456",
+            data={"access_token": "pat-theirs", "site": "datadoghq.com"},
+        )
+        self.create_organization_identity(organization=self.organization, identity=my_identity)
+        self.create_organization_identity(organization=self.organization, identity=other_identity)
+
+        with self.feature("organizations:seer-infra-telemetry"):
+            response = self.get_response(
+                self.organization.slug, "datadog_pat", access_token="pat-new"
+            )
+
+        assert response.status_code == 204
+        # The other user's identity and connection are untouched.
+        other_identity.refresh_from_db()
+        assert other_identity.data == {"access_token": "pat-theirs", "site": "datadoghq.com"}
+        assert OrganizationIdentity.objects.filter(
+            organization_id=self.organization.id, identity=other_identity
+        ).exists()
+        # My old identity was removed and a new one linked for the new org.
+        assert not Identity.objects.filter(id=my_identity.id).exists()
+        new_identity = Identity.objects.get(user=self.user, idp__external_id="dd-org-999")
+        assert new_identity.data == {"access_token": "pat-new", "site": "datadoghq.com"}
+        assert OrganizationIdentity.objects.filter(
+            organization_id=self.organization.id, identity=new_identity
+        ).exists()
+
     def test_reauthenticate_datadog_pat_requires_access_token(self) -> None:
         self._connect_datadog_pat(site="datadoghq.eu")
 

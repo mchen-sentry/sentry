@@ -94,7 +94,7 @@ class OrganizationMonitoringProviderDetailsEndpoint(ControlSiloOrganizationEndpo
 
         if isinstance(provider_type, OAuth2Provider):
             return self._link_by_oauth(provider_type, organization, provider_key, request, data)
-        return self._link_by_token(provider_type, organization, request.user, data)
+        return self._link_by_token(provider_type, organization, request.user, data, reauth=True)
 
     def _link_by_oauth(
         self,
@@ -145,14 +145,37 @@ class OrganizationMonitoringProviderDetailsEndpoint(ControlSiloOrganizationEndpo
         organization: RpcOrganization,
         user: Any,
         data: dict[str, Any],
+        *,
+        reauth: bool = False,
     ) -> Response:
-        """Verify a user-submitted token and link the identity."""
+        """Verify a user-submitted token and link the identity.
+
+        When ``reauth`` is set (the reauthentication path), the user's existing
+        connections for this provider that belong to a *different* provider org
+        (``IdentityProvider.external_id``) are removed before the new credentials
+        are linked. This makes reauthentication replace the existing connection
+        instead of silently duplicating it when the new token resolves to a
+        different Datadog org. Connections for the same org are left in place so
+        ``link_provider_identity`` updates them in situ.
+        """
         try:
             identity_data = provider_type.build_identity(data)
         except (ValueError, IdentityNotValid) as e:
             return Response({"detail": str(e)}, status=400)
         except RequestException:
             return Response({"detail": "Failed to verify token with provider."}, status=400)
+
+        if reauth:
+            stale_connections = list(
+                OrganizationIdentity.objects.filter(
+                    organization_id=organization.id,
+                    identity__user_id=user.id,
+                    identity__idp__type=identity_data["type"],
+                )
+                .exclude(identity__idp__external_id=identity_data["idp_external_id"])
+                .select_related("identity")
+            )
+            self._delete_org_identities(stale_connections)
 
         try:
             link_provider_identity(
@@ -183,11 +206,22 @@ class OrganizationMonitoringProviderDetailsEndpoint(ControlSiloOrganizationEndpo
         if not org_identities:
             return Response({"detail": "Not connected to this provider."}, status=404)
 
+        self._delete_org_identities(org_identities)
+
+        return Response(status=204)
+
+    @staticmethod
+    def _delete_org_identities(org_identities: list[OrganizationIdentity]) -> None:
+        """Delete organization identities, dropping any ``Identity`` rows that
+        are no longer referenced by another organization.
+
+        Mirrors the cleanup performed by the ``DELETE`` handler so removing a
+        monitoring-provider connection (or replacing it during reauthentication)
+        never orphans the user's stored credentials.
+        """
         for org_identity in org_identities:
             with transaction.atomic(router.db_for_write(OrganizationIdentity)):
                 identity: Identity = org_identity.identity
                 org_identity.delete()
                 if not OrganizationIdentity.objects.filter(identity=identity).exists():
                     identity.delete()
-
-        return Response(status=204)
