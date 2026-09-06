@@ -83,8 +83,17 @@ class AssembleResult(NamedTuple):
         self.bundle_temp_file.close()
 
 
-def _get_assemble_file_blob_ids(task, org_or_project, name, checksum, chunks) -> list[int] | None:
-    """Validates uploaded chunks and returns their IDs in assembly order."""
+def _get_assemble_file_blob_ids(
+    task, org_or_project, name, checksum, chunks, scope_extra=None
+) -> list[int] | None:
+    """Validates uploaded chunks and returns their IDs in assembly order.
+
+    ``scope_extra`` is an optional extra discriminator appended to the assemble
+    status cache scope (see ``_get_cache_key``). Callers whose assembly result
+    is keyed by something finer than the owning org/project (e.g. a specific
+    ``PreprodArtifact`` id) must pass the same ``scope_extra`` here so error
+    statuses are written to the same cache key the caller reads from.
+    """
     from sentry.models.files.fileblob import FileBlob
 
     if isinstance(org_or_project, Project):
@@ -109,6 +118,7 @@ def _get_assemble_file_blob_ids(task, org_or_project, name, checksum, chunks) ->
             checksum,
             ChunkFileState.ERROR,
             detail=f"File {name} exceeds maximum size ({file_size} > {MAX_FILE_SIZE})",
+            scope_extra=scope_extra,
         )
 
         return None
@@ -128,6 +138,7 @@ def _get_assemble_file_blob_ids(task, org_or_project, name, checksum, chunks) ->
             checksum,
             ChunkFileState.ERROR,
             detail="Not all chunks available for assembling",
+            scope_extra=scope_extra,
         )
 
         return None
@@ -139,7 +150,9 @@ def _get_assemble_file_blob_ids(task, org_or_project, name, checksum, chunks) ->
 
 
 @trace
-def assemble_file(task, org_or_project, name, checksum, chunks, file_type) -> AssembleResult | None:
+def assemble_file(
+    task, org_or_project, name, checksum, chunks, file_type, scope_extra=None
+) -> AssembleResult | None:
     """
     Verifies and assembles a file model from chunks.
 
@@ -148,10 +161,16 @@ def assemble_file(task, org_or_project, name, checksum, chunks, file_type) -> As
     full file in a temporary location and verifies the complete content hash.
 
     Returns a tuple ``(File, TempFile)`` on success, or ``None`` on error.
+
+    ``scope_extra`` is forwarded to the assemble-status cache writes so error
+    statuses land on the same cache key the caller uses (see
+    ``_get_cache_key``).
     """
     from sentry.models.files.utils import AssembleChecksumMismatch
 
-    file_blob_ids = _get_assemble_file_blob_ids(task, org_or_project, name, checksum, chunks)
+    file_blob_ids = _get_assemble_file_blob_ids(
+        task, org_or_project, name, checksum, chunks, scope_extra=scope_extra
+    )
     if file_blob_ids is None:
         return None
 
@@ -166,6 +185,7 @@ def assemble_file(task, org_or_project, name, checksum, chunks, file_type) -> As
             checksum,
             ChunkFileState.ERROR,
             detail="Reported checksum mismatch",
+            scope_extra=scope_extra,
         )
         return None
 
@@ -173,11 +193,20 @@ def assemble_file(task, org_or_project, name, checksum, chunks, file_type) -> As
 
 
 @trace
-def assemble_file_blobs(task, org_or_project, name, checksum, chunks) -> IO[bytes] | None:
-    """Assembles uploaded chunks into a temporary file without creating a ``File``."""
+def assemble_file_blobs(
+    task, org_or_project, name, checksum, chunks, scope_extra=None
+) -> IO[bytes] | None:
+    """Assembles uploaded chunks into a temporary file without creating a ``File``.
+
+    ``scope_extra`` is forwarded to the assemble-status cache writes so error
+    statuses land on the same cache key the caller uses (see
+    ``_get_cache_key``).
+    """
     from sentry.models.files.fileblob import FileBlob
 
-    file_blob_ids = _get_assemble_file_blob_ids(task, org_or_project, name, checksum, chunks)
+    file_blob_ids = _get_assemble_file_blob_ids(
+        task, org_or_project, name, checksum, chunks, scope_extra=scope_extra
+    )
     if file_blob_ids is None:
         return None
 
@@ -208,6 +237,7 @@ def assemble_file_blobs(task, org_or_project, name, checksum, chunks) -> IO[byte
             checksum,
             ChunkFileState.ERROR,
             detail="Reported checksum mismatch",
+            scope_extra=scope_extra,
         )
         return None
 
@@ -216,7 +246,7 @@ def assemble_file_blobs(task, org_or_project, name, checksum, chunks) -> IO[byte
     return temp_file
 
 
-def _get_cache_key(task, scope, checksum):
+def _get_cache_key(task, scope, checksum, scope_extra=None):
     """Computes the cache key for assemble status.
 
     ``task`` must be one of the ``AssembleTask`` values. The scope can be the
@@ -225,13 +255,25 @@ def _get_cache_key(task, scope, checksum):
 
     ``checksum`` should be the SHA1 hash of the main file that is being
     assembled.
+
+    ``scope_extra`` is an optional extra discriminator that is appended to the
+    scope (separated by ``":"``) before hashing. It MUST be passed consistently
+    by every reader and writer of a given status when the assembled file is
+    linked to a finer-grained entity than the scope alone identifies (e.g. a
+    specific ``PreprodArtifact`` rather than per-project+checksum). When
+    omitted, the key is identical to the historical ``"scope|checksum|task"``
+    composition so existing callers (DIF, artifact bundle, release bundle)
+    are unaffected.
     """
+    scope_str = str(scope)
+    if scope_extra is not None:
+        scope_str = f"{scope_str}:{scope_extra}"
     return (
         "assemble-status:%s"
         % hashlib.sha1(
             b"%s|%s|%s"
             % (
-                str(scope).encode("ascii"),
+                scope_str.encode("ascii"),
                 checksum.encode("ascii"),
                 str(task).encode(),
             )
@@ -245,15 +287,18 @@ def _get_redis_cluster_for_assemble() -> RedisCluster:
 
 
 @trace
-def get_assemble_status(task, scope, checksum):
+def get_assemble_status(task, scope, checksum, scope_extra=None):
     """
     Checks the current status of an assembling task.
 
     Returns a tuple in the form ``(status, details)``, where ``status`` is the
     ChunkFileState, and ``details`` is either None or a string containing a
     notice or error message.
+
+    ``scope_extra`` must match the value passed to ``set_assemble_status`` for
+    the same status entry; see ``_get_cache_key``.
     """
-    cache_key = _get_cache_key(task, scope, checksum)
+    cache_key = _get_cache_key(task, scope, checksum, scope_extra)
     client = _get_redis_cluster_for_assemble()
     rv = client.get(cache_key)
 
@@ -265,21 +310,27 @@ def get_assemble_status(task, scope, checksum):
 
 
 @trace
-def set_assemble_status(task, scope, checksum, state, detail=None):
+def set_assemble_status(task, scope, checksum, state, detail=None, scope_extra=None):
     """
     Updates the status of an assembling task. It is cached for 10 minutes.
+
+    ``scope_extra`` must match the value passed to ``get_assemble_status`` for
+    the same status entry; see ``_get_cache_key``.
     """
-    cache_key = _get_cache_key(task, scope, checksum)
+    cache_key = _get_cache_key(task, scope, checksum, scope_extra)
     redis_client = _get_redis_cluster_for_assemble()
     redis_client.set(name=cache_key, value=orjson.dumps([state, detail]), ex=600)
 
 
 @trace
-def delete_assemble_status(task, scope, checksum):
+def delete_assemble_status(task, scope, checksum, scope_extra=None):
     """
     Deletes the status of an assembling task.
+
+    ``scope_extra`` must match the value passed to ``set_assemble_status`` for
+    the same status entry; see ``_get_cache_key``.
     """
-    cache_key = _get_cache_key(task, scope, checksum)
+    cache_key = _get_cache_key(task, scope, checksum, scope_extra)
     redis_client = _get_redis_cluster_for_assemble()
     redis_client.delete(cache_key)
 

@@ -562,20 +562,27 @@ class AssemblePreprodArtifactInstallableAppTest(BaseAssembleTest):
         checksum = checksum or sha1(content).hexdigest()
         blob = FileBlob.from_file_with_organization(ContentFile(content), self.organization)
         chunks = chunks or [blob.checksum]
+        effective_artifact_id = artifact_id or self.preprod_artifact.id
 
         assemble_preprod_artifact_installable_app(
             org_id=org_id or self.organization.id,
             project_id=project_id or self.project.id,
             checksum=checksum,
             chunks=chunks,
-            artifact_id=artifact_id or self.preprod_artifact.id,
+            artifact_id=effective_artifact_id,
         )
 
         status, details = get_assemble_status(
-            AssembleTask.PREPROD_ARTIFACT_INSTALLABLE_APP, project_id or self.project.id, checksum
+            AssembleTask.PREPROD_ARTIFACT_INSTALLABLE_APP,
+            project_id or self.project.id,
+            checksum,
+            scope_extra=str(effective_artifact_id),
         )
         delete_assemble_status(
-            AssembleTask.PREPROD_ARTIFACT_INSTALLABLE_APP, project_id or self.project.id, checksum
+            AssembleTask.PREPROD_ARTIFACT_INSTALLABLE_APP,
+            project_id or self.project.id,
+            checksum,
+            scope_extra=str(effective_artifact_id),
         )
         return status, details
 
@@ -649,20 +656,27 @@ class AssemblePreprodArtifactSizeAnalysisTest(BaseAssembleTest):
         checksum = checksum or sha1(content).hexdigest()
         blob = FileBlob.from_file_with_organization(ContentFile(content), self.organization)
         chunks = chunks or [blob.checksum]
+        effective_artifact_id = artifact_id or self.preprod_artifact.id
 
         assemble_preprod_artifact_size_analysis(
             org_id=org_id or self.organization.id,
             project_id=project_id or self.project.id,
             checksum=checksum,
             chunks=chunks,
-            artifact_id=artifact_id or self.preprod_artifact.id,
+            artifact_id=effective_artifact_id,
         )
 
         status, details = get_assemble_status(
-            AssembleTask.PREPROD_ARTIFACT_SIZE_ANALYSIS, project_id or self.project.id, checksum
+            AssembleTask.PREPROD_ARTIFACT_SIZE_ANALYSIS,
+            project_id or self.project.id,
+            checksum,
+            scope_extra=str(effective_artifact_id),
         )
         delete_assemble_status(
-            AssembleTask.PREPROD_ARTIFACT_SIZE_ANALYSIS, project_id or self.project.id, checksum
+            AssembleTask.PREPROD_ARTIFACT_SIZE_ANALYSIS,
+            project_id or self.project.id,
+            checksum,
+            scope_extra=str(effective_artifact_id),
         )
         return status, details
 

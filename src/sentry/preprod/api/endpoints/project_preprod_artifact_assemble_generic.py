@@ -132,8 +132,14 @@ class ProjectPreprodArtifactAssembleGenericEndpoint(ProjectEndpoint):
             assemble_type = data.get("assemble_type")
 
             def update_assemble_status(task: str) -> Response | None:
-                # Check current assembly status
-                state, detail = get_assemble_status(task, project.id, checksum)
+                # Check current assembly status. The scope MUST include
+                # head_artifact_id: the assembled file is linked to a specific
+                # PreprodArtifact by the worker task, so a cached status for
+                # one artifact must not short-circuit a sibling artifact that
+                # happens to share the same checksum.
+                state, detail = get_assemble_status(
+                    task, project.id, checksum, scope_extra=str(head_artifact_id)
+                )
                 if state is not None:
                     return Response({"state": state, "detail": detail, "missingChunks": []})
 
@@ -148,6 +154,7 @@ class ProjectPreprodArtifactAssembleGenericEndpoint(ProjectEndpoint):
                     project.id,
                     checksum,
                     ChunkFileState.CREATED,
+                    scope_extra=str(head_artifact_id),
                 )
                 return None
 
