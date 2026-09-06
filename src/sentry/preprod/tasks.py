@@ -322,7 +322,15 @@ def _assemble_preprod_artifact_file(
     checksum: str,
     chunks: Any,
     callback: Callable[[AssembleResult, Any], None],
+    artifact_id: int | None = None,
 ) -> None:
+    # The assembled file is linked to a *specific* PreprodArtifact by the
+    # callback, so the assemble-status cache must be scoped per-artifact to
+    # match. ``scope_extra`` is intentionally None when artifact_id is None so
+    # the key composition falls back to the historical per-project+checksum
+    # scope (no spurious "None" discriminator).
+    scope_extra = str(artifact_id) if artifact_id is not None else None
+
     logger.info(
         "Starting preprod file assembly",
         extra={
@@ -330,6 +338,7 @@ def _assemble_preprod_artifact_file(
             "project_id": project_id,
             "assemble_task": assemble_task,
             "checksum": checksum,
+            "preprod_artifact_id": artifact_id,
         },
     )
 
@@ -343,6 +352,7 @@ def _assemble_preprod_artifact_file(
             project_id,
             checksum,
             ChunkFileState.ASSEMBLING,
+            scope_extra=scope_extra,
         )
 
         assemble_result = assemble_file(
@@ -352,9 +362,12 @@ def _assemble_preprod_artifact_file(
             checksum=checksum,
             chunks=chunks,
             file_type="preprod.file",
+            scope_extra=scope_extra,
         )
         if assemble_result is None:
-            state, detail = get_assemble_status(assemble_task, project_id, checksum)
+            state, detail = get_assemble_status(
+                assemble_task, project_id, checksum, scope_extra=scope_extra
+            )
             logger.error(
                 "Failed to assemble preprod file",
                 extra={
@@ -364,6 +377,7 @@ def _assemble_preprod_artifact_file(
                     "checksum": checksum,
                     "detail": detail,
                     "state": state,
+                    "preprod_artifact_id": artifact_id,
                 },
             )
             return
@@ -377,6 +391,7 @@ def _assemble_preprod_artifact_file(
                 "project_id": project_id,
                 "assemble_task": assemble_task,
                 "checksum": checksum,
+                "preprod_artifact_id": artifact_id,
             },
         )
         set_assemble_status(
@@ -385,9 +400,16 @@ def _assemble_preprod_artifact_file(
             checksum,
             ChunkFileState.ERROR,
             detail=str(e),
+            scope_extra=scope_extra,
         )
     else:
-        set_assemble_status(assemble_task, project_id, checksum, ChunkFileState.OK)
+        set_assemble_status(
+            assemble_task,
+            project_id,
+            checksum,
+            ChunkFileState.OK,
+            scope_extra=scope_extra,
+        )
 
 
 def _assemble_preprod_artifact_size_analysis(
@@ -713,6 +735,7 @@ def assemble_preprod_artifact_size_analysis(
         lambda assemble_result, project: _assemble_preprod_artifact_size_analysis(
             assemble_result, project, artifact_id, org_id
         ),
+        artifact_id=artifact_id,
     )
 
 
@@ -827,6 +850,7 @@ def assemble_preprod_artifact_installable_app(
         lambda assemble_result, project: _assemble_preprod_artifact_installable_app(
             assemble_result, project, artifact_id, org_id
         ),
+        artifact_id=artifact_id,
     )
 
 
