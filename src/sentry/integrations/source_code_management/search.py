@@ -126,7 +126,7 @@ class SourceCodeSearchEndpoint(IntegrationEndpoint, Generic[T], ABC):
 
                 if self.repository_field:  # only fetch repository
                     repo = request.GET.get(self.repository_field)
-                    if repo is None:
+                    if not repo:
                         lifecycle.record_halt(
                             str(SourceCodeSearchEndpointHaltReason.MISSING_REPOSITORY_FIELD)
                         )

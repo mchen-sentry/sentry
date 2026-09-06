@@ -7,8 +7,13 @@ from django.urls import reverse
 
 from fixtures.gitlab import GitLabTestCase
 from sentry.integrations.models.organization_integration import OrganizationIntegration
+from sentry.integrations.source_code_management.metrics import SourceCodeSearchEndpointHaltReason
 from sentry.integrations.types import EventLifecycleOutcome, IntegrationProviderSlug
-from sentry.testutils.asserts import assert_middleware_metrics
+from sentry.testutils.asserts import (
+    assert_halt_metric,
+    assert_middleware_metrics,
+    assert_slo_metric_calls,
+)
 from sentry.testutils.silo import control_silo_test
 
 
@@ -214,6 +219,24 @@ class GitlabSearchTest(GitLabTestCase):
         resp = self.client.get(self.url, data={"field": "externalIssue", "query": "AEIOU"})
 
         assert resp.status_code == 400
+
+    @patch("sentry.integrations.utils.metrics.EventLifecycle.record_event")
+    def test_empty_project_with_external_issue_field(self, mock_record: MagicMock) -> None:
+        resp = self.client.get(
+            self.url, data={"field": "externalIssue", "query": "AEIOU", "project": ""}
+        )
+
+        assert resp.status_code == 400
+        assert resp.data == {"detail": "project is a required parameter"}
+        assert len(mock_record.mock_calls) == 6
+        middleware_calls = mock_record.mock_calls[:3] + mock_record.mock_calls[-1:]
+        assert_middleware_metrics(middleware_calls)
+
+        product_calls = mock_record.mock_calls[3:-1]
+        assert_slo_metric_calls(product_calls, EventLifecycleOutcome.HALTED)
+        assert_halt_metric(
+            mock_record, SourceCodeSearchEndpointHaltReason.MISSING_REPOSITORY_FIELD.value
+        )
 
     # Missing Resources
     def test_missing_integration(self) -> None:

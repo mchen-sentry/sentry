@@ -304,6 +304,24 @@ class GithubSearchTest(APITestCase):
             mock_record, SourceCodeSearchEndpointHaltReason.MISSING_REPOSITORY_FIELD.value
         )
 
+    @patch("sentry.integrations.utils.metrics.EventLifecycle.record_event")
+    def test_empty_repository(self, mock_record: MagicMock) -> None:
+        resp = self.client.get(
+            self.url, data={"field": "externalIssue", "query": "XYZ", "repo": ""}
+        )
+
+        assert resp.status_code == 400
+        assert resp.data == {"detail": "repo is a required parameter"}
+        assert len(mock_record.mock_calls) == 6
+        middleware_calls = mock_record.mock_calls[:3] + mock_record.mock_calls[-1:]
+        assert_middleware_metrics(middleware_calls)
+
+        product_calls = mock_record.mock_calls[3:-1]
+        assert_slo_metric_calls(product_calls, EventLifecycleOutcome.HALTED)
+        assert_halt_metric(
+            mock_record, SourceCodeSearchEndpointHaltReason.MISSING_REPOSITORY_FIELD.value
+        )
+
     def test_invalid_field(self) -> None:
         resp = self.client.get(self.url, data={"field": "invalid-field", "query": "nope"})
 

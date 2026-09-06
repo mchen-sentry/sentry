@@ -5,7 +5,11 @@ from django.urls import reverse
 
 from sentry.integrations.source_code_management.metrics import SourceCodeSearchEndpointHaltReason
 from sentry.integrations.types import EventLifecycleOutcome
-from sentry.testutils.asserts import assert_halt_metric, assert_middleware_metrics
+from sentry.testutils.asserts import (
+    assert_halt_metric,
+    assert_middleware_metrics,
+    assert_slo_metric_calls,
+)
 from sentry.testutils.cases import APITestCase
 from sentry.testutils.silo import control_silo_test
 
@@ -125,3 +129,22 @@ class BitbucketSearchEndpointTest(APITestCase):
         # NOTE: handle_search_issues returns without raising an API error, so for the
         # purposes of logging the GET request completes successfully
         assert halt2.args[0] == EventLifecycleOutcome.SUCCESS
+
+    # Request Validations
+    @patch("sentry.integrations.utils.metrics.EventLifecycle.record_event")
+    def test_empty_repository(self, mock_record: MagicMock) -> None:
+        resp = self.client.get(
+            self.path, data={"field": "externalIssue", "query": "issue", "repo": ""}
+        )
+
+        assert resp.status_code == 400
+        assert resp.data == {"detail": "repo is a required parameter"}
+        assert len(mock_record.mock_calls) == 6
+        middleware_calls = mock_record.mock_calls[:3] + mock_record.mock_calls[-1:]
+        assert_middleware_metrics(middleware_calls)
+
+        product_calls = mock_record.mock_calls[3:-1]
+        assert_slo_metric_calls(product_calls, EventLifecycleOutcome.HALTED)
+        assert_halt_metric(
+            mock_record, SourceCodeSearchEndpointHaltReason.MISSING_REPOSITORY_FIELD.value
+        )
