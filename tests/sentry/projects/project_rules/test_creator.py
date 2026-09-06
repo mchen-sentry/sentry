@@ -1,3 +1,5 @@
+from rest_framework.request import Request
+
 from sentry.grouping.grouptype import ErrorGroupType
 from sentry.models.options.project_option import ProjectOption
 from sentry.models.rule import RuleSource
@@ -103,3 +105,84 @@ class TestProjectRuleCreator(TestCase):
         workflow = AlertRuleWorkflow.objects.get(rule_id=rule.id).workflow
         action_filter = WorkflowDataConditionGroup.objects.get(workflow=workflow).condition_group
         assert not DataConditionGroupAction.objects.filter(condition_group=action_filter).exists()
+
+
+class TestProjectRuleCreatorCreatedBy(TestCase):
+    def setUp(self) -> None:
+        self.user = self.create_user()
+        self.other_user = self.create_user()
+        self.org = self.create_organization(name="bloop", owner=self.user)
+        self.project = self.create_project(
+            teams=[self.create_team()], name="foo", fire_project_created=True
+        )
+        ProjectOption.objects.set_value(self.project, "webhooks:enabled", True)
+
+    def _make_creator(
+        self,
+        *,
+        request: Request | None = None,
+        user_id: int | None = None,
+        owner: Actor | None = None,
+    ) -> ProjectRuleCreator:
+        return ProjectRuleCreator(
+            name="New Cool Rule",
+            project=self.project,
+            action_match="any",
+            filter_match="all",
+            conditions=[
+                {
+                    "id": "sentry.rules.conditions.first_seen_event.FirstSeenEventCondition",
+                    "key": "foo",
+                    "match": "eq",
+                    "value": "bar",
+                },
+            ],
+            actions=[
+                {
+                    "id": "sentry.rules.actions.notify_event.NotifyEventAction",
+                    "name": "Send a notification (for all legacy integrations)",
+                }
+            ],
+            environment=self.environment.id,
+            frequency=5,
+            source=RuleSource.ISSUE,
+            request=request,
+            user_id=user_id,
+            owner=owner,
+        )
+
+    def test_user_id_flows_to_workflow_created_by(self) -> None:
+        rule = self._make_creator(user_id=self.user.id).run()
+
+        workflow = AlertRuleWorkflow.objects.get(rule_id=rule.id).workflow
+        assert workflow.created_by_id == self.user.id
+
+    def test_request_takes_precedence_over_user_id(self) -> None:
+        request = self.make_request(user=self.other_user)
+        rule = self._make_creator(request=request, user_id=self.user.id).run()
+
+        workflow = AlertRuleWorkflow.objects.get(rule_id=rule.id).workflow
+        assert workflow.created_by_id == self.other_user.id
+
+    def test_request_only(self) -> None:
+        request = self.make_request(user=self.user)
+        rule = self._make_creator(request=request).run()
+
+        workflow = AlertRuleWorkflow.objects.get(rule_id=rule.id).workflow
+        assert workflow.created_by_id == self.user.id
+
+    def test_neither_request_nor_user_id(self) -> None:
+        rule = self._make_creator().run()
+
+        workflow = AlertRuleWorkflow.objects.get(rule_id=rule.id).workflow
+        assert workflow.created_by_id is None
+
+    def test_user_id_does_not_affect_legacy_rule_owner(self) -> None:
+        rule = self._make_creator(
+            user_id=self.user.id, owner=Actor.from_id(user_id=self.other_user.id)
+        ).run()
+
+        assert rule.owner_user_id == self.other_user.id
+        workflow = AlertRuleWorkflow.objects.get(rule_id=rule.id).workflow
+        assert workflow.created_by_id == self.user.id
+        assert workflow.owner_user_id == self.other_user.id

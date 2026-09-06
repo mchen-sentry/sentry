@@ -19,6 +19,7 @@ from sentry.models.rule import Rule
 from sentry.testutils.cases import TestCase
 from sentry.testutils.helpers import install_slack
 from sentry.testutils.skips import requires_snuba
+from sentry.workflow_engine.models import AlertRuleWorkflow
 from tests.sentry.integrations.slack.utils.test_mock_slack_response import mock_slack_response
 
 pytestmark = [requires_snuba]
@@ -113,6 +114,8 @@ class SlackTasksTest(TestCase):
             }
         ]
         assert rule.created_by_id == self.user.id
+        arw = AlertRuleWorkflow.objects.get(rule_id=rule.id)
+        assert arw.workflow.created_by_id == self.user.id
 
     @responses.activate
     @patch.object(RedisRuleStatus, "set_value", return_value=None)
@@ -157,6 +160,8 @@ class SlackTasksTest(TestCase):
             }
         ]
         assert rule.created_by_id == self.user.id
+        arw = AlertRuleWorkflow.objects.get(rule_id=rule.id)
+        assert arw.workflow.created_by_id == self.user.id
 
     @responses.activate
     @patch.object(RedisRuleStatus, "set_value", return_value=None)
@@ -196,6 +201,8 @@ class SlackTasksTest(TestCase):
         assert rule.label == "New Rule with Owner"
         assert rule.owner_team_id == team.id
         assert rule.owner_user_id is None
+        arw = AlertRuleWorkflow.objects.get(rule_id=rule.id)
+        assert arw.workflow.created_by_id == self.user.id
 
     @responses.activate
     @patch.object(RedisRuleStatus, "set_value", return_value=None)
