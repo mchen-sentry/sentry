@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import ipaddress
 import socket
 from collections.abc import Callable
 from functools import partial
 from typing import Any, Optional, cast
 
+from django.conf import settings
+from django.utils.encoding import force_str
 from requests import Session as _Session
 from requests.adapters import DEFAULT_POOLBLOCK, DEFAULT_RETRIES, HTTPAdapter, Retry
+from urllib3 import proxy_from_url
 from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.connectionpool import connection_from_url as _connection_from_url
@@ -16,9 +20,37 @@ from urllib3.util.connection import _TYPE_SOCKET_OPTIONS, _set_socket_options
 from urllib3.util.timeout import _DEFAULT_TIMEOUT
 
 from sentry import VERSION as SENTRY_VERSION
-from sentry.net.socket import safe_create_connection
+from sentry.net.socket import is_ipaddress_allowed, safe_create_connection
 
 IsIpAddressPermitted = Optional[Callable[[str], bool]]
+
+# IP subnets permitted for the *proxy host* connection. When an HTTP(S) proxy is
+# in effect the resolved proxy host IP is run through `is_ipaddress_permitted`
+# (see BlacklistAdapter.proxy_manager_for); these subnets exempt a trusted
+# proxy from that check. Mirrors SENTRY_DISALLOWED_IPS / SENTRY_ALLOWED_IPS in
+# sentry.net.socket.
+ALLOWED_PROXY_IPS = frozenset(
+    ipaddress.ip_network(str(i), strict=False) for i in settings.SENTRY_ALLOWED_PROXY_IPS
+)
+
+
+def _is_proxy_ipaddress_allowed(ip: str, is_ipaddress_permitted: IsIpAddressPermitted) -> bool:
+    """
+    IP-permission callback used for the *proxy host* connection.
+
+    A proxy host listed in ``SENTRY_ALLOWED_PROXY_IPS`` is always permitted;
+    otherwise the configured ``is_ipaddress_permitted`` callback applies. When
+    no per-silo checker is configured (``None``) the default blocklist via
+    ``is_ipaddress_allowed`` is enforced, matching the no-proxy path.
+    """
+    if ALLOWED_PROXY_IPS:
+        addr = ipaddress.ip_address(force_str(ip, strings_only=True))
+        for network in ALLOWED_PROXY_IPS:
+            if addr in network:
+                return True
+    if is_ipaddress_permitted is not None:
+        return is_ipaddress_permitted(ip)
+    return is_ipaddress_allowed(ip)
 
 
 class SafeConnectionMixin:
@@ -182,6 +214,49 @@ class BlacklistAdapter(HTTPAdapter):
             **pool_kwargs,
         )
         # End custom code.
+
+    def proxy_manager_for(self, proxy: str, **proxy_kwargs: Any):
+        """
+        Return a urllib3 ``ProxyManager`` whose connection pools are the
+        ``Safe*`` variants so the *proxy host* TCP connect flows through
+        ``safe_create_connection`` and the configured ``is_ipaddress_permitted``
+        callback (default ``SENTRY_DISALLOWED_IPS`` blocklist, or a per-silo
+        allowlist such as ``validate_cell_ip_address`` /
+        ``is_control_silo_ip_address``).
+
+        The base ``HTTPAdapter.proxy_manager_for`` builds a plain
+        ``urllib3.ProxyManager`` whose ``pool_classes_by_scheme`` uses stock
+        connection pools, which bypasses ``safe_create_connection`` entirely.
+        """
+        manager = self.proxy_manager.get(proxy)
+        if manager is not None:
+            return manager
+        # SOCKS proxy hosts are handled by the base implementation. Safe-IP
+        # enforcement for the SOCKS proxy host is intentionally out of scope
+        # here; deferring preserves existing behavior.
+        if proxy.lower().startswith("socks"):
+            return super().proxy_manager_for(proxy, **proxy_kwargs)
+        proxy_permitted = partial(
+            _is_proxy_ipaddress_allowed, is_ipaddress_permitted=self.is_ipaddress_permitted
+        )
+        manager = proxy_from_url(
+            proxy,
+            proxy_headers=self.proxy_headers(proxy),
+            num_pools=self._pool_connections,
+            maxsize=self._pool_maxsize,
+            block=self._pool_block,
+            **proxy_kwargs,
+        )
+        manager.pool_classes_by_scheme = {  # https://github.com/urllib3/urllib3/issues/3554
+            "http": partial(  # type: ignore[dict-item]  # https://github.com/urllib3/urllib3/issues/3554
+                SafeHTTPConnectionPool, is_ipaddress_permitted=proxy_permitted
+            ),
+            "https": partial(  # type: ignore[dict-item]  # https://github.com/urllib3/urllib3/issues/3554
+                SafeHTTPSConnectionPool, is_ipaddress_permitted=proxy_permitted
+            ),
+        }
+        self.proxy_manager[proxy] = manager
+        return manager
 
 
 class TimeoutAdapter(HTTPAdapter):
