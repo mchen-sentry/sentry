@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 from rest_framework import status as status_codes
@@ -18,6 +19,7 @@ from sentry.api.serializers.models.actor import ActorSerializer, ActorSerializer
 from sentry.models.group import STATUS_QUERY_CHOICES
 from sentry.models.groupassignee import GroupAssignee
 from sentry.models.organization import Organization
+from sentry.models.project import Project
 from sentry.models.team import Team
 from sentry.seer.models import SeerApiError
 from sentry.seer.signed_seer_api import SupergroupDetailData
@@ -26,10 +28,10 @@ from sentry.users.services.user.service import user_service
 
 logger = logging.getLogger(__name__)
 
-# When the union of group_ids across all supergroups exceeds this, we skip the
-# per-group fan-out: the status filter (which would prune resolved ids from
-# each supergroup) and assignee lookups. Counts/group_ids then reflect what
-# Seer returned, and assignees come back empty.
+# When the union of group_ids across all supergroups (after re-scoping to the caller's accessible
+# projects) exceeds this, we skip the per-group fan-out: the status filter (which would prune
+# resolved ids from each supergroup) and assignee lookups. Counts/group_ids then reflect the
+# re-scoped group_ids Seer returned, and assignees come back empty.
 _MAX_GROUPS_FOR_FETCH = 100
 
 
@@ -88,17 +90,24 @@ class OrganizationSupergroupsByGroupEndpoint(OrganizationEndpoint):
         except SeerApiError as exc:
             return Response({"detail": "Failed to fetch supergroups"}, status=exc.status)
 
-        # Seer returns every group_id in each supergroup regardless of request. We apply any
-        # filters from the request after we get the data from Seer.
+        # Seer returns every group_id in each supergroup regardless of request, including group_ids
+        # from projects the caller cannot access. Re-scope the returned group_ids to the caller's
+        # accessible projects before applying any request filters or returning data.
+        all_response_group_ids = {gid for sg in data["data"] for gid in sg["group_ids"]}
+        response_groups = get_group_list(organization.id, projects, list(all_response_group_ids))
+        accessible_ids = {g.id for g in response_groups}
+
+        for sg in data["data"]:
+            sg["group_ids"] = [gid for gid in sg["group_ids"] if gid in accessible_ids]
+        data["data"] = [sg for sg in data["data"] if sg["group_ids"]]
+
         all_response_group_ids = {gid for sg in data["data"] for gid in sg["group_ids"]}
         if len(all_response_group_ids) > _MAX_GROUPS_FOR_FETCH:
             return Response({"data": data["data"], "meta": {"estimated": True}})
 
         if status_param:
             matching_ids = {
-                g.id
-                for g in get_group_list(organization.id, projects, list(all_response_group_ids))
-                if g.status == STATUS_QUERY_CHOICES[status_param]
+                g.id for g in response_groups if g.status == STATUS_QUERY_CHOICES[status_param]
             }
 
             for sg in data["data"]:
@@ -107,14 +116,16 @@ class OrganizationSupergroupsByGroupEndpoint(OrganizationEndpoint):
 
         return Response(
             {
-                "data": _add_assignees(organization, data["data"]),
+                "data": _add_assignees(organization, projects, data["data"]),
                 "meta": {"estimated": False},
             }
         )
 
 
 def _add_assignees(
-    organization: Organization, supergroups: list[SupergroupDetailData]
+    organization: Organization,
+    projects: Sequence[Project],
+    supergroups: list[SupergroupDetailData],
 ) -> list[dict[str, Any]]:
     all_group_ids = {gid for sg in supergroups for gid in sg["group_ids"]}
 
@@ -122,7 +133,7 @@ def _add_assignees(
     group_to_team: dict[int, int] = {}
     for group_id, user_id, team_id in GroupAssignee.objects.filter(
         group_id__in=all_group_ids,
-        group__project__organization_id=organization.id,
+        group__project__in=projects,
     ).values_list("group_id", "user_id", "team_id"):
         if user_id is not None:
             group_to_user[group_id] = user_id

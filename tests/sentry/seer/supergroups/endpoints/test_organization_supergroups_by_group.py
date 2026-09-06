@@ -166,30 +166,29 @@ class OrganizationSupergroupsByGroupEndpointTest(APITestCase):
     @patch("sentry.seer.supergroups.by_group.make_supergroups_get_by_group_ids_request")
     def test_skips_fanout_over_threshold(self, mock_seer):
         threshold = organization_supergroups_by_group._MAX_GROUPS_FOR_FETCH
-        fake_group_ids = list(range(10_000_000, 10_000_000 + threshold))
+        # The endpoint re-scopes Seer-returned group_ids to accessible projects
+        # before applying the threshold, so use real accessible groups to push
+        # the re-scoped count past the threshold.
+        groups = [self.create_group(project=self.project) for _ in range(threshold + 1)]
+        # A resolved group must still appear in the "estimated" response because
+        # the estimated branch short-circuits before the status filter.
+        resolved = self.create_group(project=self.project, status=GroupStatus.RESOLVED)
+        group_ids = [g.id for g in groups] + [resolved.id]
         mock_seer.return_value = mock_seer_response(
-            {
-                "data": [
-                    {
-                        "id": 1,
-                        "group_ids": [self.resolved_group.id, *fake_group_ids],
-                        "title": "too big",
-                    }
-                ]
-            }
+            {"data": [{"id": 1, "group_ids": group_ids, "title": "too big"}]}
         )
 
         with self.feature("organizations:top-issues-ui"):
             response = self.get_success_response(
                 self.organization.slug,
-                group_id=[self.resolved_group.id],
+                group_id=[groups[0].id],
                 status="unresolved",
             )
 
         assert response.data["meta"] == {"estimated": True}
         sg = response.data["data"][0]
         assert "assignees" not in sg
-        assert self.resolved_group.id in sg["group_ids"]
+        assert set(sg["group_ids"]) == set(group_ids)
 
     def test_returns_404_when_all_groups_are_in_inaccessible_projects(self):
         self.organization.flags.allow_joinleave = False
@@ -226,12 +225,26 @@ class OrganizationSupergroupsByGroupEndpointTest(APITestCase):
         self.project.add_team(member_team)
 
         accessible_group = self.create_group(project=self.project)
+        accessible_user = self.create_user(email="accessible@example.com")
+        GroupAssignee.objects.assign(accessible_group, accessible_user)
 
         other_project = self.create_project(organization=self.organization)
         inaccessible_group = self.create_group(project=other_project)
+        secret_user = self.create_user(email="secret@example.com")
+        GroupAssignee.objects.assign(inaccessible_group, secret_user)
 
+        # Seer returns every group_id in each supergroup regardless of request,
+        # so it returns the inaccessible group_id even though it wasn't requested.
         mock_seer.return_value = mock_seer_response(
-            {"data": [{"id": 1, "group_ids": [accessible_group.id], "title": "sg"}]}
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "group_ids": [accessible_group.id, inaccessible_group.id],
+                        "title": "sg",
+                    }
+                ]
+            }
         )
 
         self.login_as(member_user)
@@ -242,11 +255,134 @@ class OrganizationSupergroupsByGroupEndpointTest(APITestCase):
                 group_id=[accessible_group.id, inaccessible_group.id],
             )
 
+        # Requested inaccessible ids are stripped before calling Seer.
         seer_call_body = mock_seer.call_args[0][0]
         assert accessible_group.id in seer_call_body["group_ids"]
         assert inaccessible_group.id not in seer_call_body["group_ids"]
 
+        # Seer-returned inaccessible ids (and their assignees) are filtered out
+        # on the no-status path too.
         assert len(response.data["data"]) == 1
+        sg = response.data["data"][0]
+        assert sg["group_ids"] == [accessible_group.id]
+        assert inaccessible_group.id not in sg["group_ids"]
+        assignee_keys = {(a["type"], a["id"]) for a in sg["assignees"]}
+        assert ("user", str(accessible_user.id)) in assignee_keys
+        assert ("user", str(secret_user.id)) not in assignee_keys
+
+    @patch("sentry.seer.supergroups.by_group.make_supergroups_get_by_group_ids_request")
+    def test_filters_inaccessible_groups_from_seer_response_with_status(self, mock_seer):
+        self.organization.flags.allow_joinleave = False
+        self.organization.save()
+
+        member_user = self.create_user()
+        member_team = self.create_team(organization=self.organization)
+        self.create_member(
+            organization=self.organization,
+            user=member_user,
+            role="member",
+            teams=[member_team],
+        )
+        self.project.add_team(member_team)
+
+        accessible_unresolved = self.create_group(
+            project=self.project, status=GroupStatus.UNRESOLVED
+        )
+        accessible_resolved = self.create_group(project=self.project, status=GroupStatus.RESOLVED)
+        accessible_user = self.create_user(email="accessible@example.com")
+        GroupAssignee.objects.assign(accessible_unresolved, accessible_user)
+
+        other_project = self.create_project(organization=self.organization)
+        inaccessible_unresolved = self.create_group(
+            project=other_project, status=GroupStatus.UNRESOLVED
+        )
+        secret_user = self.create_user(email="secret@example.com")
+        GroupAssignee.objects.assign(inaccessible_unresolved, secret_user)
+
+        mock_seer.return_value = mock_seer_response(
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "group_ids": [
+                            accessible_unresolved.id,
+                            accessible_resolved.id,
+                            inaccessible_unresolved.id,
+                        ],
+                        "title": "sg",
+                    }
+                ]
+            }
+        )
+
+        self.login_as(member_user)
+
+        with self.feature("organizations:top-issues-ui"):
+            response = self.get_success_response(
+                self.organization.slug,
+                group_id=[accessible_unresolved.id],
+                status="unresolved",
+            )
+
+        assert len(response.data["data"]) == 1
+        sg = response.data["data"][0]
+        # The inaccessible group is re-scoped out; the resolved accessible group
+        # is dropped by the status filter.
+        assert sg["group_ids"] == [accessible_unresolved.id]
+        assert inaccessible_unresolved.id not in sg["group_ids"]
+        assert accessible_resolved.id not in sg["group_ids"]
+        assignee_keys = {(a["type"], a["id"]) for a in sg["assignees"]}
+        assert ("user", str(accessible_user.id)) in assignee_keys
+        assert ("user", str(secret_user.id)) not in assignee_keys
+
+    @patch("sentry.seer.supergroups.by_group.make_supergroups_get_by_group_ids_request")
+    def test_estimated_path_filters_inaccessible_groups(self, mock_seer):
+        self.organization.flags.allow_joinleave = False
+        self.organization.save()
+
+        member_user = self.create_user()
+        member_team = self.create_team(organization=self.organization)
+        self.create_member(
+            organization=self.organization,
+            user=member_user,
+            role="member",
+            teams=[member_team],
+        )
+        self.project.add_team(member_team)
+
+        threshold = organization_supergroups_by_group._MAX_GROUPS_FOR_FETCH
+        accessible_groups = [self.create_group(project=self.project) for _ in range(threshold + 1)]
+
+        other_project = self.create_project(organization=self.organization)
+        inaccessible_group = self.create_group(project=other_project)
+
+        mock_seer.return_value = mock_seer_response(
+            {
+                "data": [
+                    {
+                        "id": 1,
+                        "group_ids": [g.id for g in accessible_groups] + [inaccessible_group.id],
+                        "title": "too big",
+                    }
+                ]
+            }
+        )
+
+        self.login_as(member_user)
+
+        with self.feature("organizations:top-issues-ui"):
+            response = self.get_success_response(
+                self.organization.slug,
+                group_id=[accessible_groups[0].id],
+            )
+
+        assert response.data["meta"] == {"estimated": True}
+        sg = response.data["data"][0]
+        assert "assignees" not in sg
+        # The estimated path returns re-scoped group_ids only: the inaccessible
+        # group must not leak even when the fan-out is skipped.
+        assert set(sg["group_ids"]) == {g.id for g in accessible_groups}
+        assert inaccessible_group.id not in sg["group_ids"]
 
     @patch("sentry.seer.supergroups.by_group.make_supergroups_get_by_group_ids_request")
     def test_assignee_summary_tolerates_missing_actor(self, mock_seer):
