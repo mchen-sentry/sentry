@@ -76,7 +76,13 @@ class UserUserRoleDetailsEndpoint(UserEndpoint):
             return self.respond({"detail": f"'{role_name}' is not a known role."}, status=404)
 
         with transaction.atomic(using=router.db_for_write(UserRoleUser)):
-            role.users.remove(user)
+            try:
+                UserRoleUser.objects.get(user=user, role=role).delete()
+            except UserRoleUser.DoesNotExist:
+                # The membership was removed concurrently (e.g. by another DELETE)
+                # between the lookup above and here. Mirror the POST handler's
+                # "already gone" semantics and surface the missing membership.
+                return self.respond({"detail": f"'{role_name}' is not a known role."}, status=404)
             audit_logger.info(
                 "user.remove-role",
                 extra={
