@@ -1,17 +1,20 @@
 import os
 from datetime import timedelta
+from hashlib import sha1
 from io import BytesIO
 from unittest.mock import MagicMock, Mock, patch
 from uuid import uuid4
 
 import pytest
 from django.core.files.base import ContentFile
-from django.db import DatabaseError
+from django.db import DatabaseError, IntegrityError, OperationalError
 from django.utils import timezone
 
 from sentry.models.files.file import File
 from sentry.models.files.fileblob import FileBlob
 from sentry.models.files.fileblobindex import FileBlobIndex
+from sentry.models.files.fileblobowner import FileBlobOwner
+from sentry.models.files.utils import get_storage
 from sentry.testutils.cases import TestCase
 from sentry.testutils.pytest.fixtures import django_db_all
 
@@ -75,6 +78,111 @@ class FileBlobTest(TestCase):
         file_1.putfile(contents)
 
         assert FileBlob.objects.count() == 1
+
+
+class FileBlobOrphanTest(TestCase):
+    def _spy_unique_path(self, captured: list[str]):
+        # Wrap `FileBlob.generate_unique_path` so every generated path is
+        # recorded in `captured` while still using the real implementation.
+        original = FileBlob.generate_unique_path.__func__  # type: ignore[attr-defined]
+
+        def spy_generate_unique_path(cls):
+            path = original(cls)
+            captured.append(path)
+            return path
+
+        return classmethod(spy_generate_unique_path)
+
+    def test_from_file_cleans_storage_on_operational_error(self) -> None:
+        fileobj = ContentFile(b"foo bar")
+        storage = get_storage(FileBlob._storage_config())
+        captured: list[str] = []
+
+        with (
+            patch.object(FileBlob, "generate_unique_path", self._spy_unique_path(captured)),
+            patch.object(FileBlob, "save", side_effect=OperationalError("statement timeout")),
+        ):
+            with pytest.raises(OperationalError):
+                FileBlob.from_file(fileobj)
+
+        assert FileBlob.objects.count() == 0
+        # The just-uploaded storage object must not be orphaned.
+        assert not storage.exists(captured[0])
+
+    def test_from_files_cleans_storage_on_operational_error(self) -> None:
+        files = [ContentFile(b"chunk-zero"), ContentFile(b"chunk-one")]
+        storage = get_storage(FileBlob._storage_config())
+        captured_paths: list[str] = []
+
+        with (
+            patch.object(FileBlob, "generate_unique_path", self._spy_unique_path(captured_paths)),
+            patch.object(FileBlob, "save", side_effect=OperationalError("lock timeout")),
+        ):
+            with pytest.raises(OperationalError):
+                FileBlob.from_files(files)
+
+        assert FileBlob.objects.count() == 0
+        # Every just-uploaded chunk must be cleaned up.
+        assert all(not storage.exists(path) for path in captured_paths)
+
+    def test_from_file_integrity_error_race_still_returns_existing_and_cleans(self) -> None:
+        fileobj = ContentFile(b"foo bar")
+        checksum = sha1(b"foo bar").hexdigest()
+        # The "winning" blob inserted by a concurrent uploader before our INSERT.
+        winner = FileBlob.objects.create(size=7, checksum=checksum, path="winner/ab/cdef/winner")
+
+        storage = get_storage(FileBlob._storage_config())
+        captured: list[str] = []
+
+        with (
+            patch.object(FileBlob, "generate_unique_path", self._spy_unique_path(captured)),
+            patch.object(FileBlob, "save", side_effect=IntegrityError("duplicate key")),
+            patch(
+                "sentry.models.files.abstractfileblob.get_and_optionally_update_blob",
+                return_value=None,
+            ),
+        ):
+            result = FileBlob.from_file(fileobj)
+
+        # The race handler resolves to the existing blob, not a new row.
+        assert result.id == winner.id
+        assert FileBlob.objects.count() == 1
+        # Our just-uploaded storage was deleted to avoid an orphan.
+        assert not storage.exists(captured[0])
+
+    def test_from_files_integrity_error_race_still_cleans_and_owns_existing(self) -> None:
+        files = [ContentFile(b"chunk-zero")]
+        first_checksum = sha1(b"chunk-zero").hexdigest()
+        # The "winning" blob inserted by a concurrent uploader before our INSERT.
+        winner = FileBlob.objects.create(
+            size=10, checksum=first_checksum, path="winner/zz/chunk/zero"
+        )
+
+        storage = get_storage(FileBlob._storage_config())
+        captured_paths: list[str] = []
+
+        with (
+            patch.object(FileBlob, "generate_unique_path", self._spy_unique_path(captured_paths)),
+            patch.object(FileBlob, "save", side_effect=IntegrityError("duplicate key")),
+            patch(
+                "sentry.models.files.abstractfileblob.get_and_optionally_update_blob",
+                return_value=None,
+            ),
+        ):
+            FileBlob.from_files(files, organization=self.organization)
+
+        # The raced chunk resolved to the winner; no new row was added.
+        assert FileBlob.objects.count() == 1
+        assert FileBlob.objects.get(checksum=first_checksum).id == winner.id
+        # Our just-uploaded storage was cleaned up to avoid an orphan.
+        assert not storage.exists(captured_paths[0])
+        # The existing winner gained an owner from this request.
+        assert (
+            FileBlobOwner.objects.filter(
+                blob_id=winner.id, organization_id=self.organization.id
+            ).count()
+            == 1
+        )
 
 
 class FileTest(TestCase):

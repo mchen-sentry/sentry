@@ -118,6 +118,22 @@ class AbstractFileBlob(Model, _Parent[BlobOwnerType]):
                 blob = cls.objects.get(checksum=blob.checksum)
                 storage = get_storage(cls._storage_config())
                 storage.delete(saved_path)
+            except Exception:
+                # A non-IntegrityError failure to persist the row (e.g. a transient
+                # OperationalError such as a lock/statement timeout or connection
+                # loss) must also delete the just-uploaded storage object,
+                # otherwise it is orphaned with no FileBlob row and is invisible to
+                # every DB-row-driven reaper. The blob has already been popped from
+                # `blobs_to_save`, so cleanup must happen here, not in an outer
+                # handler which can no longer reach it.
+                storage = get_storage(cls._storage_config())
+                try:
+                    storage.delete(blob.path)
+                except Exception:
+                    logger.exception(
+                        "FileBlob.from_files.cleanup_failed", extra={"path": blob.path}
+                    )
+                raise
 
             blob._ensure_blob_owned(organization)
             logger.debug("FileBlob.from_files._save_blob.end", extra={"path": blob.path})
@@ -209,6 +225,17 @@ class AbstractFileBlob(Model, _Parent[BlobOwnerType]):
             saved_path = blob.path
             blob = cls.objects.get(checksum=checksum)
             storage.delete(saved_path)
+        except Exception:
+            # A non-IntegrityError failure to persist the row (e.g. a transient
+            # OperationalError such as a lock/statement timeout or connection
+            # loss) must also delete the just-uploaded storage object, otherwise
+            # it is orphaned with no FileBlob row and is invisible to every
+            # DB-row-driven reaper. See `_save_blob` for the multi-chunk path.
+            try:
+                storage.delete(blob.path)
+            except Exception:
+                logger.exception("FileBlob.from_file.cleanup_failed", extra={"path": blob.path})
+            raise
 
         metrics.distribution("filestore.blob-size", size, unit="byte")
         logger.debug("FileBlob.from_file.end")
