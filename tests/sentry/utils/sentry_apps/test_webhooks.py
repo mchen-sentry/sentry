@@ -460,3 +460,155 @@ class ClaudeRoutineTextSummaryTest(TestCase):
         body = self._send(mock_safe_urlopen, "https://example.com/webhook")
 
         assert "text" not in body
+
+
+@cell_silo_test
+class WebhookDebugLoggingTest(TestCase):
+    """The `sentry-apps.webhook-logging.enabled` option is a `Dict` whose `DictType`
+    only validates `isinstance(value, dict)` — it neither enforces the
+    `installation_uuid` / `sentry_app_slug` sub-keys nor merges them with the
+    registered default. A partial dict persisted via `options.set` is therefore
+    round-tripped verbatim, and the webhook code must read it defensively rather
+    than crashing with `KeyError` after the webhook has already been delivered.
+    """
+
+    def setUp(self):
+        self.organization = self.create_organization()
+        self.sentry_app = self.create_sentry_app(
+            name="LoggingApp",
+            organization=self.organization,
+            webhook_url="https://example.com/webhook",
+            published=True,
+        )
+        self.install = self.create_sentry_app_installation(
+            organization=self.organization, slug=self.sentry_app.slug
+        )
+
+    def _make_event(self):
+        return AppPlatformEvent(
+            resource=SentryAppResourceType.ISSUE,
+            action=IssueActionType.CREATED,
+            install=self.install,
+            data={"test": "data"},
+        )
+
+    @staticmethod
+    def _ok_response() -> Mock:
+        mock_response = Mock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        return mock_response
+
+    @patch("sentry.utils.sentry_apps.webhooks.logger")
+    @patch("sentry.utils.sentry_apps.webhooks.safe_urlopen")
+    def test_debug_logging_enabled_by_slug(self, mock_safe_urlopen, mock_logger):
+        """When the app slug is in the `sentry_app_slug` list, the webhook-sent log fires
+        with the expected structured fields. Guards against silently breaking the
+        debug-logging feature, which had no prior test coverage."""
+        mock_safe_urlopen.return_value = self._ok_response()
+        opts = {
+            **CIRCUIT_BREAKER_OPTIONS,
+            "sentry-apps.webhook-logging.enabled": {
+                "installation_uuid": [],
+                "sentry_app_slug": [self.sentry_app.slug],
+            },
+        }
+
+        with override_options(opts):
+            send_and_save_webhook_request(self.sentry_app, self._make_event())
+
+        mock_logger.info.assert_called_once()
+        assert mock_logger.info.call_args.args[0] == "sentry_app_webhook_sent"
+        extra = mock_logger.info.call_args.kwargs["extra"]
+        assert extra["sentry_app_slug"] == self.sentry_app.slug
+        assert extra["response_code"] == 200
+
+    @patch("sentry.utils.sentry_apps.webhooks.logger")
+    @patch("sentry.utils.sentry_apps.webhooks.safe_urlopen")
+    def test_partial_dict_missing_sentry_app_slug_does_not_raise(
+        self, mock_safe_urlopen, mock_logger
+    ):
+        """A partial dict missing the `sentry_app_slug` key must not raise `KeyError`.
+
+        The uuid short-circuits the `or` to True, so without the defensive `.get`
+        the bare `["sentry_app_slug"]` access would never be reached here — but the
+        fix reads both keys defensively regardless, which protects the second
+        operand path. This asserts the success path completes and the log fires.
+        """
+        mock_safe_urlopen.return_value = self._ok_response()
+        opts = {
+            **CIRCUIT_BREAKER_OPTIONS,
+            # Partial dict: only installation_uuid present, sentry_app_slug key omitted.
+            "sentry-apps.webhook-logging.enabled": {"installation_uuid": [self.install.uuid]},
+        }
+
+        with override_options(opts):
+            send_and_save_webhook_request(self.sentry_app, self._make_event())
+
+        mock_logger.info.assert_called_once()
+
+    @patch("sentry.utils.sentry_apps.webhooks.logger")
+    @patch("sentry.utils.sentry_apps.webhooks.safe_urlopen")
+    def test_partial_dict_missing_installation_uuid_does_not_raise(
+        self, mock_safe_urlopen, mock_logger
+    ):
+        """A partial dict missing the `installation_uuid` key must not raise `KeyError`.
+
+        On the unfixed code the very first operand `options.get(...)["installation_uuid"]`
+        raises `KeyError` before the `or` is even evaluated. After the fix, the missing
+        key is treated as an empty list, the uuid check is False, the slug check is
+        True, and the log fires.
+        """
+        mock_safe_urlopen.return_value = self._ok_response()
+        opts = {
+            **CIRCUIT_BREAKER_OPTIONS,
+            # Partial dict: only sentry_app_slug present, installation_uuid key omitted.
+            "sentry-apps.webhook-logging.enabled": {"sentry_app_slug": [self.sentry_app.slug]},
+        }
+
+        with override_options(opts):
+            send_and_save_webhook_request(self.sentry_app, self._make_event())
+
+        mock_logger.info.assert_called_once()
+
+    @patch("sentry.utils.sentry_apps.webhooks.logger")
+    @patch("sentry.utils.sentry_apps.webhooks.safe_urlopen")
+    def test_partial_dict_missing_both_keys_does_not_raise(self, mock_safe_urlopen, mock_logger):
+        """An empty dict (both sub-keys omitted) must not raise `KeyError` and must
+        not enable logging.
+        """
+        mock_safe_urlopen.return_value = self._ok_response()
+        opts = {
+            **CIRCUIT_BREAKER_OPTIONS,
+            # Fully empty dict: neither sub-key present.
+            "sentry-apps.webhook-logging.enabled": {},
+        }
+
+        with override_options(opts):
+            send_and_save_webhook_request(self.sentry_app, self._make_event())
+
+        mock_logger.info.assert_not_called()
+
+    @patch("sentry.utils.sentry_apps.webhooks.safe_urlopen")
+    def test_partial_dict_preserves_error_contract_on_503(self, mock_safe_urlopen):
+        """A partial dict must not corrupt the documented error contract: a 503
+        response must still be translated into `ApiHostError` (not `KeyError`).
+
+        This exercises the code path that runs *after* the debug-logging block and
+        confirms the post-fix defensive read keeps the status-code handling intact.
+        """
+        mock_safe_urlopen.return_value = _MockResponse(
+            {}, '{"error": "service unavailable"}', "", False, 503, _raise_status_false, None
+        )
+        opts = {
+            **CIRCUIT_BREAKER_OPTIONS,
+            # Partial dict missing sentry_app_slug; integrator returns 503.
+            "sentry-apps.webhook-logging.enabled": {"installation_uuid": [self.install.uuid]},
+        }
+
+        with override_options(opts):
+            with pytest.raises(ApiHostError):
+                send_and_save_webhook_request(self.sentry_app, self._make_event())
+
+        # The webhook was delivered to the integrator before the error handling ran.
+        mock_safe_urlopen.assert_called_once()
