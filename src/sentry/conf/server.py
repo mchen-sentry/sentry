@@ -165,6 +165,17 @@ SENTRY_DISALLOWED_IPS: tuple[str, ...] = (
 
 SENTRY_ALLOWED_IPS: tuple[str, ...] = ()
 
+# IP subnets that are explicitly permitted for the *proxy host* connection when
+# an HTTP(S) proxy is in effect (e.g. via HTTP_PROXY/HTTPS_PROXY). SafeSession
+# otherwise runs the resolved proxy host IP through the configured
+# `is_ipaddress_permitted` callback (the default SENTRY_DISALLOWED_IPS
+# blocklist, or a per-silo allowlist such as `validate_cell_ip_address` /
+# `is_control_silo_ip_address`). A corporate egress proxy on private IP space
+# would be rejected by those checks, so operators routing egress through a
+# trusted proxy list its host IP/network here. This exemption is scoped to the
+# proxy connection only; destination-IP validation is unaffected.
+SENTRY_ALLOWED_PROXY_IPS: tuple[str, ...] = ()
+
 # When resolving DNS for external sources (source map fetching, webhooks, etc),
 # ensure that domains are fully resolved first to avoid poking internal
 # search domains.
