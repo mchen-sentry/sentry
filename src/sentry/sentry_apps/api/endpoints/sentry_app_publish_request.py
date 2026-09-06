@@ -73,9 +73,6 @@ class SentryAppPublishRequestEndpoint(SentryAppBaseEndpoint):
 
         # Permission is enforced by SentryAppPermission which requires org:admin for POST on
         # unpublished apps (see unpublished_scope_map).
-        sentry_app.status = SentryAppStatus.PUBLISH_REQUEST_INPROGRESS
-        sentry_app.save()
-
         org_mapping = OrganizationMapping.objects.filter(
             organization_id=sentry_app.owner_id
         ).first()
@@ -118,11 +115,25 @@ class SentryAppPublishRequestEndpoint(SentryAppBaseEndpoint):
             "User must be authenticated for this endpoint"
         )
         recipients = ["integrations-platform@sentry.io", request.user.email]
-        sent_messages = new_message.send(
-            to=recipients,
-        )
+
+        # Mark the publish request in-progress only after every validation has passed, and use it
+        # as a lock while the email send is in flight. If the send fails (partial-count or an
+        # unhandled exception) revert to UNPUBLISHED so the same admin can retry instead of being
+        # wedged by the is_publish_request_inprogress guard above.
+        sentry_app.status = SentryAppStatus.PUBLISH_REQUEST_INPROGRESS
+        sentry_app.save()
+
+        try:
+            sent_messages = new_message.send(
+                to=recipients,
+            )
+        except Exception:
+            sentry_app.update(status=SentryAppStatus.UNPUBLISHED)
+            raise
+
         # We sent an email to each person in the recip. list so anything less means we had a failure
         if sent_messages < len(recipients):
+            sentry_app.update(status=SentryAppStatus.UNPUBLISHED)
             extras = {"organization": org_mapping.slug, **new_context}
             sentry_sdk.capture_message("publish-email-failed", "info")
             logger.info("publish-email-failed", extra=extras)
