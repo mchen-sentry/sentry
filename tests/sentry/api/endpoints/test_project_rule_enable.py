@@ -206,3 +206,26 @@ class ProjectRuleEnableTestCase(APITestCase):
             status_code=status.HTTP_400_BAD_REQUEST,
         )
         assert response.data["detail"] == "Cannot enable a rule with no action."
+
+    def test_non_numeric_rule_id_returns_404(self) -> None:
+        """A non-numeric rule_id reaching the endpoint must NOT crash with a 500;
+        it should produce a clean 404 like the guarded sibling rule endpoints and
+        like a numeric-but-nonexistent id does in this same endpoint."""
+        response = self.get_error_response(
+            self.organization.slug,
+            self.project.slug,
+            "abc",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_out_of_range_numeric_rule_id_returns_404(self) -> None:
+        """A numeric rule_id that exceeds BoundedBigAutoField.MAX_VALUE must 404
+        rather than 500 (to_valid_int_id range-checks against MAX_VALUE)."""
+        response = self.get_error_response(
+            self.organization.slug,
+            self.project.slug,
+            f"{2**63}",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
