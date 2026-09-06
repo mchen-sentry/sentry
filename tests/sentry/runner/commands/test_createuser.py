@@ -7,7 +7,11 @@ from sentry.silo.base import SiloMode
 from sentry.testutils.cases import CliTestCase
 from sentry.testutils.silo import assume_test_silo_mode, control_silo_test
 from sentry.users.models.user import User
-from sentry.users.models.userrole import manage_default_super_admin_role
+from sentry.users.models.userrole import (
+    UserRole,
+    UserRoleUser,
+    manage_default_super_admin_role,
+)
 from sentry.users.services.user.service import user_service
 
 
@@ -110,3 +114,73 @@ class CreateUserTest(CliTestCase):
     def test_missing_password(self) -> None:
         rv = self.invoke("--email=you@somewhereawesome.com")
         assert rv.exit_code != 0, rv.output
+
+    def test_force_update_superuser_idempotent(self) -> None:
+        # Re-running `createuser --superuser --force-update` on an existing
+        # superuser must not insert duplicate `UserRoleUser` rows for the Super
+        # Admin role -- the assignment should be idempotent.
+        with self.settings(SENTRY_SINGLE_ORGANIZATION=True):
+            rv = self.invoke(
+                "--email=you@somewhereawesome.com", "--password=awesome", "--superuser"
+            )
+            assert rv.exit_code == 0, rv.output
+            user = User.objects.get(email="you@somewhereawesome.com")
+            assert UserRoleUser.objects.filter(user=user, role__name="Super Admin").count() == 1, (
+                rv.output
+            )
+
+            # Re-run with --force-update: must be a no-op for the role grant.
+            rv = self.invoke(
+                "--email=you@somewhereawesome.com",
+                "--password=newpass",
+                "--superuser",
+                "--force-update",
+            )
+            assert rv.exit_code == 0, rv.output
+            assert UserRoleUser.objects.filter(user=user, role__name="Super Admin").count() == 1, (
+                rv.output
+            )
+
+            # Idempotent across additional re-runs.
+            rv = self.invoke(
+                "--email=you@somewhereawesome.com",
+                "--password=newpass",
+                "--superuser",
+                "--force-update",
+            )
+            assert rv.exit_code == 0, rv.output
+            assert UserRoleUser.objects.filter(user=user, role__name="Super Admin").count() == 1, (
+                rv.output
+            )
+
+    def test_force_update_role_management_query_does_not_crash(self) -> None:
+        # The role-management GET/DELETE endpoints resolve the role with
+        # `UserRole.objects.get(users=user, name=role_name)` and the list
+        # endpoint uses `UserRole.objects.filter(users=user)`. Duplicate
+        # `UserRoleUser` through-rows make the `.get()` raise
+        # `MultipleObjectsReturned` (500) and the list return duplicate entries.
+        # After the fix, re-running --force-update --superuser leaves exactly
+        # one through-row, so both queries behave correctly.
+        with self.settings(SENTRY_SINGLE_ORGANIZATION=True):
+            rv = self.invoke(
+                "--email=you@somewhereawesome.com", "--password=awesome", "--superuser"
+            )
+            assert rv.exit_code == 0, rv.output
+            user = User.objects.get(email="you@somewhereawesome.com")
+
+            rv = self.invoke(
+                "--email=you@somewhereawesome.com",
+                "--password=newpass",
+                "--superuser",
+                "--force-update",
+            )
+            assert rv.exit_code == 0, rv.output
+
+            # Query used by `UserUserRoleDetailsEndpoint.get` / `.delete`.
+            role = UserRole.objects.get(users=user, name="Super Admin")
+            assert role.name == "Super Admin"
+
+            # Query used by `UserUserRolesEndpoint.get`; no duplicate entries.
+            roles = list(UserRole.objects.filter(users=user))
+            assert len(roles) == 1, roles
+            assert roles[0].name == "Super Admin"

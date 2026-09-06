@@ -56,7 +56,7 @@ def _set_superadmin(user: User) -> None:
     from sentry.users.models.userrole import UserRole, UserRoleUser
 
     role = UserRole.objects.get(name="Super Admin")
-    UserRoleUser.objects.create(user=user, role=role)
+    UserRoleUser.objects.get_or_create(user=user, role=role)
 
 
 @click.command()
