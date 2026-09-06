@@ -59,7 +59,9 @@ class BuildComparisonFingerprintsTest(TestCase):
                 ),
                 "added.png": ComparisonImageResult(status="added", head_hash="d"),
                 "removed.png": ComparisonImageResult(status="removed", base_hash="e"),
-                "errored.png": ComparisonImageResult(status="errored"),
+                "errored.png": ComparisonImageResult(
+                    status="errored", head_hash="h", base_hash="old", reason="exceeds_pixel_limit"
+                ),
                 "renamed.png": ComparisonImageResult(
                     status="renamed", head_hash="f", previous_image_file_name="old.png"
                 ),
@@ -70,7 +72,7 @@ class BuildComparisonFingerprintsTest(TestCase):
             ImageFingerprint("changed.png", "changed", "b"),
             ImageFingerprint("added.png", "added", "d"),
             ImageFingerprint("removed.png", "removed"),
-            ImageFingerprint("errored.png", "errored"),
+            ImageFingerprint("errored.png", "errored", "h"),
             ImageFingerprint("renamed.png", "renamed", "f", "old.png"),
         }
 
@@ -117,6 +119,34 @@ class BuildComparisonFingerprintsTest(TestCase):
         )
         fps = _build_comparison_fingerprints(manifest)
         assert fps == {ImageFingerprint("valid.png", "renamed", "def", "old_valid.png")}
+
+    def test_includes_head_hash_for_errored_images(self):
+        manifest = self._make_manifest(
+            {
+                "errored.png": ComparisonImageResult(
+                    status="errored",
+                    head_hash="hash_a",
+                    base_hash="old",
+                    reason="exceeds_pixel_limit",
+                ),
+            }
+        )
+        fps = _build_comparison_fingerprints(manifest)
+        assert fps == {ImageFingerprint("errored.png", "errored", "hash_a")}
+
+    def test_skips_errored_with_missing_head_hash(self):
+        manifest = self._make_manifest(
+            {
+                "no_hash.png": ComparisonImageResult(
+                    status="errored", base_hash="abc", reason="image_fetch_failed"
+                ),
+                "has_hash.png": ComparisonImageResult(
+                    status="errored", head_hash="def", base_hash="ghi", reason="exceeds_pixel_limit"
+                ),
+            }
+        )
+        fps = _build_comparison_fingerprints(manifest)
+        assert fps == {ImageFingerprint("has_hash.png", "errored", "def")}
 
 
 def _mock_session_with_manifests(manifests_by_key: dict[str, bytes]) -> MagicMock:
@@ -605,3 +635,101 @@ class TryAutoApproveSnapshotTest(TestCase):
         assert approval.extras is not None
         assert approval.extras["auto_approval"] is True
         assert approval.extras["prev_approved_artifact_id"] == sibling.id
+
+    @patch("sentry.analytics.record")
+    def test_no_auto_approve_when_errored_head_hash_differs(self, mock_analytics):
+        sibling_images = {
+            "checkout.png": ComparisonImageResult(
+                status="errored", head_hash="A", base_hash="old", reason="exceeds_pixel_limit"
+            ),
+        }
+        _, comp_key, comp_json = self._create_approved_sibling(
+            pr_number=42,
+            comparison_images=sibling_images,
+        )
+
+        cc = self.create_commit_comparison(
+            organization=self.organization,
+            pr_number=42,
+            head_repo_name="owner/repo",
+        )
+        head_artifact = self.create_preprod_artifact(
+            project=self.project,
+            commit_comparison=cc,
+            app_id="com.example.app",
+        )
+        head_manifest = self._create_head_manifest(
+            {
+                "checkout.png": ComparisonImageResult(
+                    status="errored", head_hash="B", base_hash="old", reason="exceeds_pixel_limit"
+                ),
+            }
+        )
+
+        session = _mock_session_with_manifests({comp_key: comp_json})
+        _try_auto_approve_snapshot(head_artifact, head_manifest, session)
+
+        assert not PreprodComparisonApproval.objects.filter(
+            preprod_artifact=head_artifact,
+            approval_status=PreprodComparisonApproval.ApprovalStatus.APPROVED,
+        ).exists()
+        assert_not_analytics_event(mock_analytics, PreprodStatusCheckApprovalCreatedEvent)
+
+    @patch("sentry.analytics.record")
+    def test_auto_approves_when_errored_head_hash_matches(self, mock_analytics):
+        shared_images = {
+            "checkout.png": ComparisonImageResult(
+                status="errored", head_hash="A", base_hash="old", reason="exceeds_pixel_limit"
+            ),
+            "home.png": ComparisonImageResult(status="changed", head_hash="abc", base_hash="old1"),
+        }
+        sibling, comp_key, comp_json = self._create_approved_sibling(
+            pr_number=42,
+            comparison_images=shared_images,
+        )
+
+        cc = self.create_commit_comparison(
+            organization=self.organization,
+            pr_number=42,
+            head_repo_name="owner/repo",
+        )
+        head_artifact = self.create_preprod_artifact(
+            project=self.project,
+            commit_comparison=cc,
+            app_id="com.example.app",
+        )
+        head_manifest = self._create_head_manifest(
+            {
+                "checkout.png": ComparisonImageResult(
+                    status="errored",
+                    head_hash="A",
+                    base_hash="changed_base",
+                    reason="exceeds_pixel_limit",
+                ),
+                "home.png": ComparisonImageResult(
+                    status="changed", head_hash="abc", base_hash="other_base"
+                ),
+            }
+        )
+
+        session = _mock_session_with_manifests({comp_key: comp_json})
+        _try_auto_approve_snapshot(head_artifact, head_manifest, session)
+
+        approval = PreprodComparisonApproval.objects.get(
+            preprod_artifact=head_artifact,
+            preprod_feature_type=PreprodComparisonApproval.FeatureType.SNAPSHOTS,
+            approval_status=PreprodComparisonApproval.ApprovalStatus.APPROVED,
+        )
+        assert approval.extras is not None
+        assert approval.extras["auto_approval"] is True
+        assert approval.extras["prev_approved_artifact_id"] == sibling.id
+        assert_any_analytics_event(
+            mock_analytics,
+            PreprodStatusCheckApprovalCreatedEvent(
+                organization_id=self.organization.id,
+                project_id=self.project.id,
+                artifact_id=head_artifact.id,
+                product="snapshots",
+                source="auto",
+            ),
+        )
