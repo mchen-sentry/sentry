@@ -14,6 +14,7 @@ from fixtures.gitlab import GET_COMMIT_RESPONSE, GitLabTestCase
 from sentry.integrations.gitlab.client import GitLabApiClient, GitLabSetupApiClient
 from sentry.integrations.gitlab.constants import GITLAB_WEBHOOK_VERSION, GITLAB_WEBHOOK_VERSION_KEY
 from sentry.integrations.gitlab.integration import GitlabIntegration, GitlabIntegrationProvider
+from sentry.integrations.gitlab.tasks import update_all_project_webhooks
 from sentry.integrations.models.integration import Integration
 from sentry.integrations.models.integration_external_project import IntegrationExternalProject
 from sentry.integrations.models.organization_integration import OrganizationIntegration
@@ -779,6 +780,87 @@ class GitlabIssueSyncTest(GitLabTestCase):
         assert org_integration.config["existing_key"] == "existing_value"
         assert org_integration.config["sync_forward_assignment"] is True
         assert org_integration.config["sync_comments"] is True
+
+    @responses.activate
+    def test_update_organization_config_does_not_reschedule_after_no_repos_task_run(self) -> None:
+        """Regression test: after the migration task actually runs against an org
+        with zero linked repositories, the webhook version is bumped and a
+        subsequent config edit must NOT re-schedule the migration task.
+
+        Before the fix, the no-repositories early return left the version at 0,
+        so every config edit re-scheduled ``update_all_project_webhooks`` for as
+        long as the org had zero linked repositories.
+        """
+        integration = Integration.objects.get(provider=self.provider)
+        installation = get_installation_of_type(
+            GitlabIntegration, integration, self.organization.id
+        )
+
+        # Ensure the webhook version is unset (the default post-install state) and
+        # that the org has zero linked repositories.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is not None
+        config = org_integration.config
+        config.pop(GITLAB_WEBHOOK_VERSION_KEY, None)
+        integration_service.update_organization_integration(
+            org_integration_id=org_integration.id,
+            config=config,
+        )
+
+        # 1. First config edit: the version is missing (defaults to 0), so the
+        # migration task must be scheduled.
+        with patch(
+            "sentry.integrations.gitlab.integration.repository_service.schedule_update_gitlab_project_webhooks"
+        ) as mock_schedule_webhooks:
+            installation.update_organization_config({"sync_reverse_assignment": True})
+            mock_schedule_webhooks.assert_called_once_with(
+                organization_id=self.organization.id,
+                integration_id=integration.id,
+            )
+
+        # 2. Actually run the real migration task synchronously. With zero
+        # repositories the no-repositories branch fires and now bumps the version.
+        with assume_test_silo_mode(SiloMode.CELL):
+            update_all_project_webhooks(
+                integration_id=integration.id,
+                organization_id=self.organization.id,
+            )
+
+        # 3. The version must now be bumped to the current version.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is not None
+        assert org_integration.config.get(GITLAB_WEBHOOK_VERSION_KEY) == GITLAB_WEBHOOK_VERSION
+
+        # 4. Re-fetch the installation to simulate a fresh request handling the
+        # next config edit (the in-memory org_integration on the previous
+        # installation instance is not refreshed by the out-of-band task).
+        installation = get_installation_of_type(
+            GitlabIntegration, integration, self.organization.id
+        )
+
+        # 5. Second config edit: the version is now current, so the migration
+        # task must NOT be re-scheduled.
+        with patch(
+            "sentry.integrations.gitlab.integration.repository_service.schedule_update_gitlab_project_webhooks"
+        ) as mock_schedule_webhooks:
+            installation.update_organization_config({"sync_comments": True})
+            mock_schedule_webhooks.assert_not_called()
+
+        # 6. The new config value is persisted and the version is still current.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is not None
+        assert org_integration.config.get(GITLAB_WEBHOOK_VERSION_KEY) == GITLAB_WEBHOOK_VERSION
+        assert org_integration.config["sync_comments"] is True
+        assert org_integration.config["sync_reverse_assignment"] is True
 
     @responses.activate
     @with_feature("organizations:integrations-gitlab-project-management")
