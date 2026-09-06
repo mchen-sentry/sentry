@@ -79,6 +79,22 @@ def test_url_matches_rejects_mismatched_hostname(referrer: str, target: str) -> 
 @pytest.mark.parametrize(
     "referrer,target",
     [
+        ("http://localhost", "*.sentry.io"),
+        ("http://localhost", ".sentry.io"),
+        ("http://localhost:3000", "*.sentry.io"),
+    ],
+)
+def test_url_matches_wildcard_rejects_single_label_hostname(referrer: str, target: str) -> None:
+    assert not url_matches(urlparse(referrer), target)
+
+
+def test_is_origin_allowed_wildcard_rejects_single_label_hostname() -> None:
+    assert not is_origin_allowed("http://localhost", ["example.net", "*.sentry.io"])
+
+
+@pytest.mark.parametrize(
+    "referrer,target",
+    [
         ("http://example.com:80", "http://example.com:80"),
         ("http://example.com:80", "http://example.com"),
         ("http://example.com:80", "example.com:80"),
