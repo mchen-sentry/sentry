@@ -323,11 +323,15 @@ def viewer_context_from_header(
 def is_jwt_viewer_context(header_value: str) -> bool:
     """Check whether the header value is a JWT by attempting to read its header.
 
-    Uses PyJWT's own parser — raises ``DecodeError`` on anything that
-    isn't a valid JWT structure (raw JSON, empty string, etc.).
+    Uses PyJWT's own parser. ``get_unverified_header`` raises a subclass of
+    ``InvalidTokenError`` on anything that isn't a structurally-valid JWT whose
+    JOSE header also passes PyJWT's ``_validate_kid`` / ``_validate_crit``
+    checks (raw JSON, empty string, non-string ``kid``, unsupported ``crit``,
+    etc.). Catching the common base class ensures all of these are reported as
+    "not a viewer-context JWT" rather than propagating out of the request path.
     """
     try:
         pyjwt.get_unverified_header(header_value)
         return True
-    except pyjwt.exceptions.DecodeError:
+    except pyjwt.exceptions.InvalidTokenError:
         return False
