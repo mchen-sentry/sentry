@@ -1,3 +1,5 @@
+from typing import Any
+
 import sentry_sdk
 from rest_framework import status
 from rest_framework.request import Request
@@ -11,6 +13,7 @@ from sentry.api.base import cell_silo_endpoint
 from sentry.api.bases.project import ProjectAlertRulePermission, ProjectEndpoint
 from sentry.api.endpoints.project_rules import find_duplicate_rule
 from sentry.api.exceptions import ResourceDoesNotExist
+from sentry.api.utils import to_valid_int_id
 from sentry.constants import ObjectStatus
 from sentry.models.rule import Rule
 from sentry.workflow_engine.utils.legacy_metric_tracking import (
@@ -26,6 +29,17 @@ class ProjectRuleEnableEndpoint(ProjectEndpoint):
     }
     owner = ApiOwner.ISSUES
     permission_classes = (ProjectAlertRulePermission,)
+
+    def convert_args(
+        self, request: Request, rule_id: str, *args: Any, **kwargs: Any
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        args, kwargs = super().convert_args(request, *args, **kwargs)
+        # Validate the URL-captured rule_id before it reaches the ORM. A non-numeric
+        # (or out-of-range) id would otherwise make BoundedBigAutoField.get_prep_value
+        # raise ValueError during the query, which the `except Rule.DoesNotExist`
+        # clause below does not catch, turning a malformed request into a 500.
+        kwargs["rule_id"] = to_valid_int_id("rule_id", rule_id, raise_404=True)
+        return args, kwargs
 
     @track_alert_endpoint_execution("PUT", "sentry-api-0-project-rule-enable")
     def put(self, request: Request, project, rule_id) -> Response:
