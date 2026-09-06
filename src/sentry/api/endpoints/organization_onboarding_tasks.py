@@ -10,7 +10,11 @@ from sentry.api.base import cell_silo_endpoint
 from sentry.api.bases.organization import OrganizationEndpoint, OrganizationPermission
 from sentry.api.serializers import serialize
 from sentry.models.organization import Organization
-from sentry.models.organizationonboardingtask import OnboardingTask, OnboardingTaskStatus
+from sentry.models.organizationonboardingtask import (
+    OnboardingTask,
+    OnboardingTaskStatus,
+    OrganizationOnboardingTask,
+)
 
 
 class OnboardingTaskPermission(OrganizationPermission):
@@ -56,6 +60,19 @@ class OrganizationOnboardingTaskEndpoint(OrganizationEndpoint):
             values["date_completed"] = timezone.now()
         if completion_seen:
             values["completion_seen"] = timezone.now()
+
+        # A `completionSeen`-only request (or any request that resolves to no
+        # `status`) is only valid as an update of an existing row. The
+        # `status` column is NOT NULL with no default, so attempting to create a
+        # row without it would raise an IntegrityError that surfaces as a 500.
+        # Reject this case explicitly with a structured 422 instead.
+        if (
+            "status" not in values
+            and not OrganizationOnboardingTask.objects.filter(
+                organization=organization, task=task_id
+            ).exists()
+        ):
+            return Response({"detail": "status must be provided to create a task"}, status=422)
 
         instance, created = onboarding_tasks.create_or_update_onboarding_task(
             organization=organization,
