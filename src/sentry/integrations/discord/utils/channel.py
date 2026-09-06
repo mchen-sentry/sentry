@@ -3,7 +3,6 @@ from __future__ import annotations
 from enum import Enum
 
 from django.core.exceptions import ValidationError
-from requests.exceptions import Timeout
 
 from sentry.integrations.discord.client import DiscordClient
 from sentry.shared_integrations.exceptions import ApiError, ApiTimeoutError, IntegrationError
@@ -43,6 +42,16 @@ def validate_channel_id(channel_id: str, guild_id: str, guild_name: str | None) 
     client = DiscordClient()
     try:
         result = client.get_channel(channel_id)
+    except ApiTimeoutError:
+        logger.info(
+            "rule.discord.channel_lookup_timed_out",
+            extra={
+                "channel_id": channel_id,
+                "guild_name": guild_name,
+                "reason": "channel lookup timed out",
+            },
+        )
+        raise
     except ApiError as e:
         if e.code == 400:
             logger.info(
@@ -89,16 +98,6 @@ def validate_channel_id(channel_id: str, guild_id: str, guild_name: str | None) 
                 },
             )
             raise IntegrationError("Bad response from Discord channel lookup.")
-    except Timeout:
-        logger.info(
-            "rule.discord.channel_lookup_timed_out",
-            extra={
-                "channel_id": channel_id,
-                "guild_name": guild_name,
-                "reason": "channel lookup timed out",
-            },
-        )
-        raise ApiTimeoutError("Discord channel lookup timed out")
 
     if not isinstance(result, dict):
         raise IntegrationError("Bad response from Discord channel lookup.")
