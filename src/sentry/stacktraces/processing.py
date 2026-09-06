@@ -252,12 +252,18 @@ def normalize_stacktraces_for_grouping(
                         },
                     )
 
-                    # TODO: This can go away once we're fully transitioned off of the
-                    # `newstyle:2023-01-11` grouping config
-                    if grouping_config and grouping_config.initial_context.get(
-                        "prevent_python_multiprocessing_context_line_parameterization"
+                # TODO: This can go away once we're fully transitioned off of the
+                # `newstyle:2023-01-11` grouping config. Kept outside the regex block above so the
+                # restore also fires during a config transition, where the secondary run sees a line
+                # already parameterized by the primary run and the regex no longer matches.
+                if grouping_config and grouping_config.initial_context.get(
+                    "prevent_python_multiprocessing_context_line_parameterization"
+                ):
+                    orig_context_line = get_path(frame, "data", "orig_context_line")
+                    if orig_context_line is not None and orig_context_line != frame.get(
+                        "context_line"
                     ):
-                        frame["context_line"] = context_line
+                        frame["context_line"] = orig_context_line
 
         if stripped_querystring:
             # Fires once per event, regardless of how many frames' filenames were stripped
