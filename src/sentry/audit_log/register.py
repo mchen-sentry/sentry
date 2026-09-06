@@ -228,6 +228,14 @@ default_manager.add(
         template='disabled rule "{label}"',
     )
 )
+default_manager.add(
+    AuditLogEvent(
+        event_id=85,
+        name="RULE_UNSNOOZE",
+        api_name="rule.unmute",
+        template='unmuted rule "{label}"',
+    )
+)
 default_manager.add(events.ServiceHookAddAuditLogEvent())
 default_manager.add(events.ServiceHookEditAuditLogEvent())
 default_manager.add(events.ServiceHookRemoveAuditLogEvent())
@@ -394,6 +402,14 @@ default_manager.add(
         name="ALERT_RULE_SNOOZE",
         api_name="alertrule.mute",
         template='muted metric alert rule "{label}"',
+    )
+)
+default_manager.add(
+    AuditLogEvent(
+        event_id=169,
+        name="ALERT_RULE_UNSNOOZE",
+        api_name="alertrule.unmute",
+        template='unmuted metric alert rule "{label}"',
     )
 )
 default_manager.add(

@@ -384,16 +384,73 @@ class DeleteRuleSnoozeTest(BaseRuleSnoozeTest):
         """Test that a user can unsnooze a rule they've snoozed for everyone"""
         self.snooze_rule(owner_id=self.user.id, rule=self.issue_alert_rule)
 
-        self.get_success_response(
-            self.organization.slug,
-            self.project.slug,
-            self.issue_alert_rule.id,
-            target="everyone",
-            status_code=204,
-        )
+        with outbox_runner():
+            self.get_success_response(
+                self.organization.slug,
+                self.project.slug,
+                self.issue_alert_rule.id,
+                target="everyone",
+                status_code=204,
+            )
         assert not RuleSnooze.objects.filter(
             rule=self.issue_alert_rule.id, user_id=self.user.id
         ).exists()
+        assert not RuleSnooze.objects.filter(rule=self.issue_alert_rule.id).exists()
+        event = log_rpc_service.find_last_log(
+            event=audit_log.get_event_id("RULE_UNSNOOZE"),
+            organization_id=self.organization.id,
+            target_object_id=self.issue_alert_rule.id,
+        )
+        assert event is not None
+        assert event.actor_user_id == self.user.id
+
+    def test_delete_issue_alert_rule_mute_myself_no_audit_log(self) -> None:
+        """Test that unsnoozing a rule for just yourself does not record an audit log entry"""
+        self.snooze_rule(user_id=self.user.id, owner_id=self.user.id, rule=self.issue_alert_rule)
+
+        with outbox_runner():
+            self.get_success_response(
+                self.organization.slug,
+                self.project.slug,
+                self.issue_alert_rule.id,
+                target="me",
+                status_code=204,
+            )
+        assert not RuleSnooze.objects.filter(
+            rule=self.issue_alert_rule.id, user_id=self.user.id
+        ).exists()
+        event = log_rpc_service.find_last_log(
+            event=audit_log.get_event_id("RULE_UNSNOOZE"),
+            organization_id=self.organization.id,
+            target_object_id=self.issue_alert_rule.id,
+        )
+        assert event is None
+
+    def test_delete_issue_alert_rule_mute_everyone_without_alert_write(self) -> None:
+        """Test that a user without alerts:write cannot unmute an everyone snooze and no audit log is created"""
+        self.snooze_rule(owner_id=self.user.id, rule=self.issue_alert_rule)
+
+        member_user = self.create_user()
+        self.create_member(
+            user=member_user, organization=self.organization, role="member", teams=[self.team]
+        )
+        self.organization.update_option("sentry:alerts_member_write", False)
+        self.login_as(member_user)
+
+        with outbox_runner():
+            self.get_error_response(
+                self.organization.slug,
+                self.project.slug,
+                self.issue_alert_rule.id,
+                status_code=403,
+            )
+        assert RuleSnooze.objects.filter(rule=self.issue_alert_rule.id, user_id=None).exists()
+        event = log_rpc_service.find_last_log(
+            event=audit_log.get_event_id("RULE_UNSNOOZE"),
+            organization_id=self.organization.id,
+            target_object_id=self.issue_alert_rule.id,
+        )
+        assert event is None
 
     def test_delete_issue_alert_rule_without_alert_write(self) -> None:
         """Test that a user without alerts:write access cannot unmute an issue alert rule"""
@@ -701,15 +758,76 @@ class DeleteMetricRuleSnoozeTest(BaseRuleSnoozeTest):
     def test_delete_metric_alert_rule_mute_everyone(self) -> None:
         """Test that a user can unsnooze a metric rule they've snoozed for everyone"""
         self.snooze_rule(owner_id=self.user.id, alert_rule=self.metric_alert_rule)
-        self.get_success_response(
-            self.organization.slug,
-            self.project.slug,
-            self.metric_alert_rule.id,
-            status_code=204,
-        )
+        with outbox_runner():
+            self.get_success_response(
+                self.organization.slug,
+                self.project.slug,
+                self.metric_alert_rule.id,
+                status_code=204,
+            )
         assert not RuleSnooze.objects.filter(
             alert_rule=self.metric_alert_rule.id, user_id=self.user.id
         ).exists()
+        assert not RuleSnooze.objects.filter(alert_rule=self.metric_alert_rule.id).exists()
+        event = log_rpc_service.find_last_log(
+            event=audit_log.get_event_id("ALERT_RULE_UNSNOOZE"),
+            organization_id=self.organization.id,
+            target_object_id=self.metric_alert_rule.id,
+        )
+        assert event is not None
+        assert event.actor_user_id == self.user.id
+
+    def test_delete_metric_alert_rule_mute_myself_no_audit_log(self) -> None:
+        """Test that unsnoozing a metric alert rule for just yourself does not record an audit log entry"""
+        self.snooze_rule(
+            user_id=self.user.id, owner_id=self.user.id, alert_rule=self.metric_alert_rule
+        )
+
+        with outbox_runner():
+            self.get_success_response(
+                self.organization.slug,
+                self.project.slug,
+                self.metric_alert_rule.id,
+                target="me",
+                status_code=204,
+            )
+        assert not RuleSnooze.objects.filter(
+            alert_rule=self.metric_alert_rule.id, user_id=self.user.id
+        ).exists()
+        event = log_rpc_service.find_last_log(
+            event=audit_log.get_event_id("ALERT_RULE_UNSNOOZE"),
+            organization_id=self.organization.id,
+            target_object_id=self.metric_alert_rule.id,
+        )
+        assert event is None
+
+    def test_delete_metric_alert_rule_mute_everyone_without_alert_write(self) -> None:
+        """Test that a user without alerts:write cannot unmute an everyone metric snooze and no audit log is created"""
+        self.snooze_rule(owner_id=self.user.id, alert_rule=self.metric_alert_rule)
+
+        member_user = self.create_user()
+        self.create_member(
+            user=member_user, organization=self.organization, role="member", teams=[self.team]
+        )
+        self.organization.update_option("sentry:alerts_member_write", False)
+        self.login_as(member_user)
+
+        with outbox_runner():
+            self.get_error_response(
+                self.organization.slug,
+                self.project.slug,
+                self.metric_alert_rule.id,
+                status_code=403,
+            )
+        assert RuleSnooze.objects.filter(
+            alert_rule=self.metric_alert_rule.id, user_id=None
+        ).exists()
+        event = log_rpc_service.find_last_log(
+            event=audit_log.get_event_id("ALERT_RULE_UNSNOOZE"),
+            organization_id=self.organization.id,
+            target_object_id=self.metric_alert_rule.id,
+        )
+        assert event is None
 
     def test_delete_metric_alert_rule_without_alert_write(self) -> None:
         """Test that a user without alerts:write access cannot unmute a metric alert rule"""
