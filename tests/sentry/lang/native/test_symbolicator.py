@@ -1,5 +1,5 @@
 import copy
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -347,19 +347,15 @@ class TestSymbolicatorBaseUrlConstruction:
 
 @django_db_all
 class TestSymbolicatorRequestUrlEndToEnd:
-    @pytest.fixture
-    def mock_http_session(self, monkeypatch):
+    def test_process_preserves_prefix_in_request_url(
+        self, default_project, set_sentry_option
+    ) -> None:
         mock_session = MagicMock()
         mock_session.request.return_value = _ok_response()
-        import sentry.lang.native.symbolicator as sym_module
-
-        monkeypatch.setattr(sym_module, "Session", lambda *a, **kw: mock_session)
-        return mock_session
-
-    def test_process_preserves_prefix_in_request_url(
-        self, default_project, set_sentry_option, mock_http_session
-    ) -> None:
-        with set_sentry_option("symbolicator.options", {"url": "http://proxy:8080/symbolicator/"}):
+        with (
+            patch("sentry.lang.native.symbolicator.Session", return_value=mock_session),
+            set_sentry_option("symbolicator.options", {"url": "http://proxy:8080/symbolicator/"}),
+        ):
             symbolicator = Symbolicator(
                 SymbolicatorTaskKind(SymbolicatorFunction.native),
                 lambda: None,
@@ -372,6 +368,6 @@ class TestSymbolicatorRequestUrlEndToEnd:
                 json={"stacktraces": []},
             )
 
-        method, url = mock_http_session.request.call_args.args
+        method, url = mock_session.request.call_args.args
         assert method == "post"
         assert url == "http://proxy:8080/symbolicator/symbolicate"
