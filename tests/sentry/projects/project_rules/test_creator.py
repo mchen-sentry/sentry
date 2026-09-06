@@ -1,3 +1,5 @@
+from rest_framework.request import Request
+
 from sentry.grouping.grouptype import ErrorGroupType
 from sentry.models.options.project_option import ProjectOption
 from sentry.models.rule import RuleSource
@@ -115,7 +117,13 @@ class TestProjectRuleCreatorCreatedBy(TestCase):
         )
         ProjectOption.objects.set_value(self.project, "webhooks:enabled", True)
 
-    def _make_creator(self, *, request=None, user_id=None, owner=None) -> ProjectRuleCreator:
+    def _make_creator(
+        self,
+        *,
+        request: Request | None = None,
+        user_id: int | None = None,
+        owner: Actor | None = None,
+    ) -> ProjectRuleCreator:
         return ProjectRuleCreator(
             name="New Cool Rule",
             project=self.project,
