@@ -1,4 +1,7 @@
-from sentry.preprod.build_distribution_utils import is_installable_artifact
+from sentry.preprod.build_distribution_utils import (
+    find_latest_installable_artifact,
+    is_installable_artifact,
+)
 from sentry.preprod.models import (
     PreprodArtifact,
     PreprodArtifactMobileAppInfo,
@@ -63,3 +66,78 @@ class IsInstallableArtifactTest(TestCase):
             extras=None,
         )
         assert is_installable_artifact(artifact) is True
+
+
+@cell_silo_test
+class FindLatestInstallableArtifactTest(TestCase):
+    """Regression coverage for find_latest_installable_artifact's installability rules.
+
+    find_latest_installable_artifact builds its own ORM filter rather than delegating to
+    is_installable_artifact, so it must mirror every installability rule by hand. These
+    tests lock that mirroring (in particular the app-store exclusion) so the two do not drift.
+    """
+
+    def _create_artifact(
+        self,
+        build_version: str,
+        build_number: int,
+        extras: dict | None = None,
+        artifact_type: int = PreprodArtifact.ArtifactType.XCARCHIVE,
+    ) -> PreprodArtifact:
+        return self.create_preprod_artifact(
+            project=self.project,
+            state=PreprodArtifact.ArtifactState.PROCESSED,
+            artifact_type=artifact_type,
+            app_id="com.example.app",
+            installable_app_file_id=build_number,
+            build_configuration=None,
+            extras=extras,
+            build_version=build_version,
+            build_number=build_number,
+            app_name="TestApp",
+        )
+
+    def test_app_store_build_is_not_returned_as_latest(self) -> None:
+        # The app-store build is the higher version, but is_installable_artifact rejects
+        # app-store-signed builds as not installable. find_latest_installable_artifact must
+        # skip it and return the (lower-version) development build instead.
+        app_store = self._create_artifact(
+            "2.0.0",
+            200,
+            {"is_code_signature_valid": True, "codesigning_type": "app-store"},
+        )
+        dev = self._create_artifact(
+            "1.0.0",
+            100,
+            {"is_code_signature_valid": True, "codesigning_type": "development"},
+        )
+        assert is_installable_artifact(app_store) is False
+        assert is_installable_artifact(dev) is True
+
+        latest = find_latest_installable_artifact(
+            project=self.project,
+            app_id="com.example.app",
+            platform="apple",
+            codesigning_type=None,
+        )
+
+        assert latest is not None
+        assert latest.id == dev.id
+        assert is_installable_artifact(latest) is True
+
+    def test_build_without_codesigning_type_is_still_installable(self) -> None:
+        # Builds that predate the codesigning_type field (missing JSON key) are still
+        # installable per is_installable_artifact; the app-store exclusion must not drop them.
+        no_codesigning = self._create_artifact("1.0.0", 100, {"is_code_signature_valid": True})
+        assert is_installable_artifact(no_codesigning) is True
+
+        latest = find_latest_installable_artifact(
+            project=self.project,
+            app_id="com.example.app",
+            platform="apple",
+            codesigning_type=None,
+        )
+
+        assert latest is not None
+        assert latest.id == no_codesigning.id
+        assert is_installable_artifact(latest) is True
