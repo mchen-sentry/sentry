@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 
-from sentry.shared_integrations.exceptions import ApiError
+from sentry.shared_integrations.exceptions import ApiError, ApiTimeoutError
 from sentry.testutils.cases import APITestCase
 from sentry.testutils.silo import control_silo_test
 
@@ -123,6 +123,19 @@ class DiscordChannelValidateTest(BaseChannelValidateTest):
         side_effect=ApiError("rate limited", code=429),
     )
     def test_discord_validate_api_error(self, _mock_validate):
+        resp = self._get_response(self.integration.id, "123")
+        assert resp.data == {"valid": False}
+
+    @patch(
+        "sentry.integrations.api.endpoints.organization_integration_channel_validate.discord_validate_channel_id",
+        side_effect=ApiTimeoutError("Discord channel lookup timed out"),
+    )
+    def test_discord_validate_api_timeout_error(self, _mock_validate):
+        # ApiTimeoutError is a subclass of ApiError, so it should be caught by
+        # the endpoint's `except (SlackApiError, ApiError, ValidationError)`
+        # handler and return {"valid": False} quietly, rather than falling
+        # through to the generic `except Exception` handler that produces
+        # {"valid": False, "detail": "Unexpected error"} + a sentry_sdk capture.
         resp = self._get_response(self.integration.id, "123")
         assert resp.data == {"valid": False}
 

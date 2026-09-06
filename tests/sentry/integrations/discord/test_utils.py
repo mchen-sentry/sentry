@@ -3,7 +3,6 @@ from unittest import mock
 from cryptography.exceptions import InvalidSignature
 from django.core.exceptions import ValidationError
 from pytest import raises
-from requests.exceptions import Timeout
 
 from sentry.integrations.discord.utils.auth import verify_signature
 from sentry.integrations.discord.utils.channel import ChannelType, validate_channel_id
@@ -80,8 +79,13 @@ class ValidateChannelTest(TestCase):
             validate_channel_id(self.channel_id, self.guild_id, self.guild_name)
 
     @mock.patch("sentry.integrations.discord.utils.channel.DiscordClient.get_channel")
-    def test_timeout(self, mock_get_channel: mock.MagicMock) -> None:
-        mock_get_channel.side_effect = Timeout("foo")
+    def test_timeout_via_api_timeout_error(self, mock_get_channel: mock.MagicMock) -> None:
+        # BaseApiClient._request converts requests.exceptions.Timeout into
+        # ApiTimeoutError (a subclass of ApiError) before it can escape the
+        # client, so this is the exception production code actually raises.
+        mock_get_channel.side_effect = ApiTimeoutError(
+            "Timed out attempting to reach host: discord.com"
+        )
         with raises(ApiTimeoutError):
             validate_channel_id(self.channel_id, self.guild_id, self.guild_name)
 
