@@ -48,6 +48,8 @@ def url_matches(source: ParseResult, target: str) -> bool:
 
     is_wildcard_subdomain = hostname.startswith("*.") or hostname.startswith(".")
     if is_wildcard_subdomain:
+        if "." not in source.hostname:
+            return False
         source_root = source.hostname.split(".", 1)[1]
         target_root = hostname.split(".", 1)[1]
         if source_root != target_root:

@@ -89,6 +89,21 @@ class IframeViewTest(APITestCase):
         assert f"const state = '{escapejs('invalid-domain')}';" in res.content.decode("utf-8")
 
     @override_settings(CSP_REPORT_ONLY=False)
+    def test_wildcard_origin_single_label_referrer(self) -> None:
+        self.project.update_option("sentry:toolbar_allowed_origins", ["*.nugettrends.com"])
+
+        for referrer in ("http://localhost", "http://localhost:3000", "http://intranet"):
+            res = self.client.get(self.url, HTTP_REFERER=referrer)
+            assert res.status_code == 200
+            assert res.headers.get("X-Frame-Options") == "ALLOWALL"
+            assert f"frame-ancestors {referrer}" in _get_csp_parts(res)
+            assert _has_nonce(res)
+
+            self.assertTemplateUsed(res, TEMPLATE)
+            assert f"const referrer = '{referrer}';" in res.content.decode("utf-8")
+            assert f"const state = '{escapejs('invalid-domain')}';" in res.content.decode("utf-8")
+
+    @override_settings(CSP_REPORT_ONLY=False)
     def test_no_referrer(self) -> None:
         self.project.update_option("sentry:toolbar_allowed_origins", ["*.nugettrends.com"])
 
