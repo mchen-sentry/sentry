@@ -17,6 +17,7 @@ from sentry.api.utils import get_date_range_from_stats_period
 from sentry.models.group import Group
 from sentry.models.organization import Organization
 from sentry.seer.agent.client import SeerAgentClient
+from sentry.seer.agent.client_utils import has_seer_agent_access_with_detail
 from sentry.seer.models import SeerPermissionError
 from sentry.seer.models.run import SeerRun
 
@@ -45,6 +46,10 @@ class OrganizationSeerAgentPRGroupsEndpoint(OrganizationEndpoint):
         Query Parameters:
             None
         """
+
+        has_access, error = has_seer_agent_access_with_detail(organization, request.user)
+        if not has_access:
+            raise PermissionDenied(error)
 
         # get_projects() parses ?project= from the query string, validates that
         # each project belongs to this org, and checks user access.
