@@ -347,6 +347,79 @@ class OrganizationEventsTimeseriesEndpointTest(APITestCase, SnubaTestCase, Searc
             },
         ]
 
+    def test_top_events_with_equation_in_groupby(self) -> None:
+        # Regression test for the non-RPC top-events path (default `discover`
+        # dataset): an equation supplied via the documented `groupBy` param
+        # must reach the underlying find-top-N query, matching the RPC branch.
+        # The buggy version read `equations` from the legacy `field` param,
+        # dropping `groupBy` equations; sorting by that equation then raised an
+        # uncaught KeyError that escaped as an HTTP 500 instead of a 200.
+        response = self.do_request(
+            data={
+                "start": self.start,
+                "end": self.end,
+                "interval": "1h",
+                "yAxis": ["equation|count() * 2"],
+                "groupBy": ["transaction", "equation|count() * 2"],
+                "orderby": ["-equation|count() * 2"],
+                "topEvents": 5,
+                "project": [self.project.id, self.project2.id],
+            },
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.data["meta"] == {
+            "dataset": "discover",
+            "start": self.start.timestamp() * 1000,
+            "end": self.end.timestamp() * 1000,
+        }
+        # The two distinct `transaction` values are the top events ("very bad"
+        # has 2 events, "oh my" has 1); topEvents=5 > 2, so there is no "other".
+        assert len(response.data["timeSeries"]) == 2
+
+        timeseries = response.data["timeSeries"][0]
+        assert timeseries["yAxis"] == "equation|count() * 2"
+        assert timeseries["groupBy"] == [{"key": "transaction", "value": "very bad"}]
+        assert timeseries["meta"]["order"] == 0
+        assert timeseries["meta"]["isOther"] is False
+        assert timeseries["meta"]["interval"] == 3_600_000
+        # count() * 2 per hour bucket: very bad has 1 event in bucket 0,
+        # 1 event in bucket 1, 0 events in bucket 2.
+        assert timeseries["values"] == [
+            {"incomplete": False, "timestamp": self.start.timestamp() * 1000, "value": 2.0},
+            {
+                "incomplete": False,
+                "timestamp": self.start.timestamp() * 1000 + 3_600_000,
+                "value": 2.0,
+            },
+            {
+                "incomplete": False,
+                "timestamp": self.start.timestamp() * 1000 + 3_600_000 * 2,
+                "value": 0.0,
+            },
+        ]
+
+        timeseries = response.data["timeSeries"][1]
+        assert timeseries["yAxis"] == "equation|count() * 2"
+        assert timeseries["groupBy"] == [{"key": "transaction", "value": "oh my"}]
+        assert timeseries["meta"]["order"] == 1
+        assert timeseries["meta"]["isOther"] is False
+        assert timeseries["meta"]["interval"] == 3_600_000
+        # oh my has 0 events in bucket 0, 1 event in bucket 1, 0 in bucket 2.
+        assert timeseries["values"] == [
+            {"incomplete": False, "timestamp": self.start.timestamp() * 1000, "value": 0.0},
+            {
+                "incomplete": False,
+                "timestamp": self.start.timestamp() * 1000 + 3_600_000,
+                "value": 2.0,
+            },
+            {
+                "incomplete": False,
+                "timestamp": self.start.timestamp() * 1000 + 3_600_000 * 2,
+                "value": 0.0,
+            },
+        ]
+
     def test_incomplete_bucket(self):
         with freeze_time(self.end):
             response = self.do_request(

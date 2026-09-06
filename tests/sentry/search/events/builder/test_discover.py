@@ -1116,6 +1116,22 @@ class DiscoverQueryBuilderTest(TestCase):
                 orderby="equation|",
             )
 
+    def test_orderby_equation_with_equations_populates_map(self) -> None:
+        # Ordering by an equation only resolves when the equation is actually
+        # supplied to the builder (populating equation_alias_map). This guards
+        # the equation-orderby path at the builder level without needing Snuba.
+        query = DiscoverQueryBuilder(
+            Dataset.Discover,
+            self.params,
+            query="",
+            selected_columns=["count()"],
+            equations=["count() * 2"],
+            orderby=["-equation|count() * 2"],
+        )
+        self.assertEqual(len(query.orderby), 1)
+        self.assertEqual(query.orderby[0].direction, Direction.DESC)
+        query.get_snql_query().validate()
+
     def test_orderby_salted_column_hash(self) -> None:
         query = DiscoverQueryBuilder(
             Dataset.Discover,

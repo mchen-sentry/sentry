@@ -351,7 +351,7 @@ class OrganizationEventsTimeseriesEndpoint(OrganizationEventsEndpointBase):
             return dataset.top_events_timeseries(
                 timeseries_columns=query_columns,
                 selected_columns=raw_groupby,
-                equations=self.get_equation_list(organization, request),
+                equations=self.get_equation_list(organization, request, param_name="groupBy"),
                 user_query=query,
                 snuba_params=snuba_params,
                 orderby=self.get_orderby(request),
