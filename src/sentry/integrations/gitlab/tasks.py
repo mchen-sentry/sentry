@@ -15,6 +15,7 @@ from sentry.integrations.gitlab.metrics import (
 )
 from sentry.integrations.models.integration import Integration
 from sentry.integrations.services.integration import integration_service
+from sentry.integrations.services.integration.model import RpcOrganizationIntegration
 from sentry.integrations.services.repository import repository_service
 from sentry.shared_integrations.exceptions import (
     ApiError,
@@ -35,6 +36,23 @@ GITLAB_RETRY_CODES = (
     status.HTTP_504_GATEWAY_TIMEOUT,
     errno.ECONNRESET,
 )
+
+
+def _bump_webhook_version(org_integration: RpcOrganizationIntegration) -> None:
+    """
+    Mark the GitLab webhook migration as complete for an organization integration
+    by advancing its ``gitlab_webhook_version`` config key to the current
+    ``GITLAB_WEBHOOK_VERSION``. This prevents ``update_organization_config`` from
+    re-scheduling the migration task on subsequent config edits.
+
+    Callers MUST ensure ``org_integration`` is not ``None`` before invoking this.
+    """
+    config = org_integration.config.copy()
+    config[GITLAB_WEBHOOK_VERSION_KEY] = GITLAB_WEBHOOK_VERSION
+    integration_service.update_organization_integration(
+        org_integration_id=org_integration.id,
+        config=config,
+    )
 
 
 @instrumented_task(
@@ -161,6 +179,15 @@ def update_all_project_webhooks(integration_id: int, organization_id: int) -> No
                 extra={"integration_id": integration_id, "organization_id": organization_id},
             )
             lifecycle.record_halt(GitLabWebhookUpdateHaltReason.NO_REPOSITORIES)
+            # Nothing to migrate, so the migration is considered complete. Bump
+            # the webhook version so ``update_organization_config`` does not
+            # re-schedule this task on every subsequent config edit while the org
+            # has zero linked repositories.
+            org_integration = integration_service.get_organization_integration(
+                integration_id=integration_id, organization_id=organization_id
+            )
+            if org_integration is not None:
+                _bump_webhook_version(org_integration)
             return
 
         lifecycle.add_extra("total_repositories", len(repositories))
@@ -192,9 +219,4 @@ def update_all_project_webhooks(integration_id: int, organization_id: int) -> No
         )
 
         # Update webhook version to prevent re-triggering on subsequent config changes
-        config = org_integration.config.copy()
-        config[GITLAB_WEBHOOK_VERSION_KEY] = GITLAB_WEBHOOK_VERSION
-        integration_service.update_organization_integration(
-            org_integration_id=org_integration.id,
-            config=config,
-        )
+        _bump_webhook_version(org_integration)

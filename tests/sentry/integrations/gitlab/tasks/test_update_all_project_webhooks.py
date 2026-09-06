@@ -4,8 +4,10 @@ import responses
 
 from fixtures.gitlab import GitLabTestCase
 from sentry.constants import ObjectStatus
+from sentry.integrations.gitlab.constants import GITLAB_WEBHOOK_VERSION, GITLAB_WEBHOOK_VERSION_KEY
 from sentry.integrations.gitlab.metrics import GitLabWebhookUpdateHaltReason
 from sentry.integrations.gitlab.tasks import update_all_project_webhooks, update_project_webhook
+from sentry.integrations.services.integration import integration_service
 from sentry.integrations.types import EventLifecycleOutcome
 from sentry.models.repository import Repository
 from sentry.silo.base import SiloMode
@@ -116,6 +118,49 @@ class UpdateAllProjectWebhooksTest(GitLabTestCase):
         assert last_call[0][0] == EventLifecycleOutcome.HALTED
         assert last_call[0][1] == GitLabWebhookUpdateHaltReason.NO_REPOSITORIES
 
+        # Regression guard: "no repositories" is a terminal "nothing to migrate"
+        # state, so the webhook version must be bumped to the current version to
+        # prevent ``update_organization_config`` from re-scheduling this task on
+        # every subsequent config edit while the org has zero linked repositories.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=self.integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is not None
+        assert org_integration.config.get(GITLAB_WEBHOOK_VERSION_KEY) == GITLAB_WEBHOOK_VERSION
+
+    @patch("sentry.integrations.utils.metrics.EventLifecycle.record_event")
+    @patch("sentry.integrations.gitlab.tasks.update_project_webhook.delay")
+    def test_task_handles_no_repositories_without_org_integration(
+        self, mock_delay, mock_record_event
+    ):
+        """The no-repositories branch must not raise when the org integration is
+        missing, and must not attempt to bump the version (no row to write to)."""
+        with assume_test_silo_mode(SiloMode.CELL):
+            Repository.objects.filter(integration_id=self.integration.id).delete()
+        with assume_test_silo_mode(SiloMode.CONTROL):
+            self.integration.organizationintegration_set.filter(
+                organization_id=self.organization.id
+            ).delete()
+
+        # Should not raise even though there is no org integration to bump.
+        update_all_project_webhooks(
+            integration_id=self.integration.id,
+            organization_id=self.organization.id,
+        )
+
+        assert mock_delay.call_count == 0
+        last_call = mock_record_event.call_args_list[-1]
+        assert last_call[0][0] == EventLifecycleOutcome.HALTED
+        assert last_call[0][1] == GitLabWebhookUpdateHaltReason.NO_REPOSITORIES
+
+        # No org integration row exists, so there is nothing to bump.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=self.integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is None
+
     @patch("sentry.integrations.utils.metrics.EventLifecycle.record_event")
     @patch("sentry.integrations.gitlab.tasks.update_project_webhook.delay")
     def test_task_handles_org_integration_not_found(self, mock_delay, mock_record_event):
@@ -207,6 +252,34 @@ class UpdateAllProjectWebhooksTest(GitLabTestCase):
 
         # Verify SLO metrics were recorded - task succeeds with active repos
         assert_slo_metric(mock_record_event)
+
+    @patch("sentry.integrations.utils.metrics.EventLifecycle.record_event")
+    @patch("sentry.integrations.gitlab.tasks.update_project_webhook.delay")
+    def test_task_bumps_webhook_version_on_success(self, mock_delay, mock_record_event):
+        """Test that the task bumps the webhook version after spawning per-repo tasks"""
+        # Ensure the version starts unset (defaults to 0) so we can confirm it advances.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=self.integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is not None
+        assert org_integration.config.get(GITLAB_WEBHOOK_VERSION_KEY, 0) == 0
+
+        update_all_project_webhooks(
+            integration_id=self.integration.id,
+            organization_id=self.organization.id,
+        )
+
+        assert mock_delay.call_count == 3
+        assert_slo_metric(mock_record_event)
+
+        # The version must be bumped to the current version on the happy path.
+        org_integration = integration_service.get_organization_integration(
+            integration_id=self.integration.id,
+            organization_id=self.organization.id,
+        )
+        assert org_integration is not None
+        assert org_integration.config.get(GITLAB_WEBHOOK_VERSION_KEY) == GITLAB_WEBHOOK_VERSION
 
 
 @cell_silo_test
