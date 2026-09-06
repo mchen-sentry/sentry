@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import time
 
 import jwt as pyjwt
@@ -7,6 +8,7 @@ import pytest
 from django.test import override_settings
 
 from sentry.testutils.cases import TestCase
+from sentry.utils import json
 from sentry.viewer_context import (
     ActorType,
     ViewerContext,
@@ -14,6 +16,20 @@ from sentry.viewer_context import (
     encode_viewer_context,
     is_jwt_viewer_context,
 )
+
+
+def _craft_jwt_with_header(header: dict) -> str:
+    """Build a JWT-shaped string (``<hdr>.<payload>.<sig>``) with an attacker-controlled JOSE header.
+
+    The header is base64url-encoded JSON; the payload is an empty object and the
+    signature is arbitrary — the parse we exercise (``get_unverified_header``)
+    reads only the header segment and never verifies the signature, so the
+    other segments only need to be well-formed enough that PyJWT advances to
+    header validation.
+    """
+    encoded_header = base64.urlsafe_b64encode(json.dumps(header).encode()).rstrip(b"=").decode()
+    encoded_payload = base64.urlsafe_b64encode(b"{}").rstrip(b"=").decode()
+    return f"{encoded_header}.{encoded_payload}.sig"
 
 
 class TestEncodeDecodeRoundtrip(TestCase):
@@ -160,3 +176,30 @@ class TestIsJwtViewerContext(TestCase):
 
     def test_empty_string(self):
         assert is_jwt_viewer_context("") is False
+
+    def test_non_string_kid(self):
+        # PyJWT's `_validate_kid` raises InvalidTokenError (not DecodeError) when
+        # `kid` is not a string; the narrow `except DecodeError` would let it escape.
+        assert (
+            is_jwt_viewer_context(_craft_jwt_with_header({"alg": "HS256", "kid": 12345})) is False
+        )
+
+    def test_unsupported_crit_extension(self):
+        # `crit` listing an extension outside PyJWT's _supported_crit ({"b64"})
+        # raises InvalidTokenError.
+        assert (
+            is_jwt_viewer_context(_craft_jwt_with_header({"alg": "HS256", "crit": ["unknown"]}))
+            is False
+        )
+
+    def test_supported_crit_returns_true(self):
+        # Sanity check: a header that genuinely passes PyJWT's `_validate_crit`
+        # (the listed extension `b64` is supported AND present as a header field,
+        # per RFC 7515 §4.1.11) is still recognized as a JWT — i.e. the widened
+        # catch didn't over-reject well-formed headers.
+        assert (
+            is_jwt_viewer_context(
+                _craft_jwt_with_header({"alg": "HS256", "crit": ["b64"], "b64": True})
+            )
+            is True
+        )

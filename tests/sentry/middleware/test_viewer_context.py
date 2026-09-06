@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from typing import cast
 from unittest.mock import MagicMock, patch
 
@@ -12,12 +13,26 @@ from sentry.middleware.auth import AuthenticationMiddleware
 from sentry.middleware.viewer_context import ViewerContextMiddleware, _viewer_context_from_request
 from sentry.seer import agent_token
 from sentry.testutils.cases import TestCase
+from sentry.utils import json
 from sentry.viewer_context import (
     ActorType,
     ViewerContext,
     encode_viewer_context,
     get_viewer_context,
 )
+
+
+def _craft_jwt_with_header(header: dict) -> str:
+    """Build a JWT-shaped string with an attacker-controlled JOSE header.
+
+    `get_unverified_header` reads only the header segment and runs PyJWT's
+    `_validate_kid` / `_validate_crit` on it before returning, so a non-string
+    `kid` or an unsupported `crit` value raises `InvalidTokenError` from inside
+    `viewer_context_from_header` — without ever verifying the signature.
+    """
+    encoded_header = base64.urlsafe_b64encode(json.dumps(header).encode()).rstrip(b"=").decode()
+    encoded_payload = base64.urlsafe_b64encode(b"{}").rstrip(b"=").decode()
+    return f"{encoded_header}.{encoded_payload}.sig"
 
 
 class ViewerContextFromRequestTest(TestCase):
@@ -364,9 +379,70 @@ class ViewerContextMiddlewareTest(TestCase):
         assert len(captured) == 1
         ctx = captured[0]
         assert ctx.user_id == self.user.id
-        assert ctx.actor_type == ActorType.USER
+        assert ctx.actor_type is ActorType.USER
 
     @override_settings(SENTRY_VIEWER_CONTEXT_ENABLED=True)
+    @override_settings(SEER_API_SHARED_SECRET="test-secret")
+    def test_malformed_kid_jwt_falls_back_to_request_user(self):
+        # A header whose JOSE header has a non-string `kid` raises
+        # InvalidTokenError (not DecodeError) from `get_unverified_header`.
+        # The middleware must treat it as "not a viewer-context JWT" and fall
+        # back to the request user rather than raising a 500.
+        response_holder: list = []
+        captured: list = []
+
+        def get_response(request):
+            captured.append(get_viewer_context())
+            mock_response = MagicMock(status_code=200)
+            response_holder.append(mock_response)
+            return mock_response
+
+        middleware = ViewerContextMiddleware(get_response)
+
+        request = self.factory.get(
+            "/", HTTP_X_VIEWER_CONTEXT=_craft_jwt_with_header({"alg": "HS256", "kid": 12345})
+        )
+        request.user = self.user
+        request.auth = None
+
+        middleware(request)
+
+        assert len(captured) == 1
+        ctx = captured[0]
+        assert ctx.user_id == self.user.id
+        assert ctx.actor_type is ActorType.USER
+        assert response_holder[0].status_code == 200
+
+    @override_settings(SENTRY_VIEWER_CONTEXT_ENABLED=True)
+    @override_settings(SEER_API_SHARED_SECRET="test-secret")
+    def test_malformed_jwt_anonymous_does_not_raise(self):
+        # The bug's reachability claim: the malformed-header check happens
+        # before any auth/output gate, so an UNAUTHENTICATED request reaches
+        # `is_jwt_viewer_context`. It must still not raise (no 500) and fall
+        # back to the empty request context.
+        captured: list = []
+
+        def get_response(request):
+            captured.append(get_viewer_context())
+            return MagicMock(status_code=200)
+
+        middleware = ViewerContextMiddleware(get_response)
+
+        request = self.factory.get(
+            "/", HTTP_X_VIEWER_CONTEXT=_craft_jwt_with_header({"alg": "HS256", "kid": 12345})
+        )
+        request.user = AnonymousUser()
+        request.auth = None
+
+        middleware(request)
+
+        assert len(captured) == 1
+        ctx = captured[0]
+        assert ctx.user_id is None
+        assert ctx.organization_id is None
+
+    @override_settings(SENTRY_VIEWER_CONTEXT_ENABLED=True)
+    @override_settings(SEER_API_SHARED_SECRET="test-secret")
     def test_raw_json_without_signature_falls_back(self):
         captured: list = []
 
