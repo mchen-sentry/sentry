@@ -31,15 +31,22 @@ from sentry.organizations.services.organization.model import (
 )
 
 
+def normalize_feature_name(feature: str) -> str:
+    """Normalize a feature name for case- and separator-insensitive comparison."""
+    return feature.lower().strip().replace("-", "_")
+
+
 def prepare_feature_filters(features_raw: Sequence[str]) -> set[str]:
     """Normalize feature names from query params."""
-    return {feature.lower().strip() for feature in features_raw}
+    return {normalize_feature_name(feature) for feature in features_raw}
 
 
 def prepare_features(integration: Integration) -> set[str]:
     """Normalize feature names Integration provider feature lists."""
 
-    return {feature.name.lower().strip() for feature in integration.get_provider().features}
+    return {
+        normalize_feature_name(feature.value) for feature in integration.get_provider().features
+    }
 
 
 def filter_by_features(

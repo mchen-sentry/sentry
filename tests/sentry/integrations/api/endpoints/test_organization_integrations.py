@@ -1,3 +1,7 @@
+from sentry.integrations.api.endpoints.organization_integrations_index import (
+    normalize_feature_name,
+)
+from sentry.integrations.base import IntegrationFeatures
 from sentry.testutils.cases import APITestCase
 from sentry.testutils.silo import control_silo_test
 
@@ -48,9 +52,37 @@ class OrganizationIntegrationsListTest(APITestCase):
 
     def test_feature_filters(self) -> None:
         response = self.get_success_response(
+            self.organization.slug, qs_params={"features": "issue-basic"}
+        )
+        assert [item["id"] for item in response.data] == [str(self.integration.id)]
+
+    def test_feature_filters_accepts_underscored_form(self) -> None:
+        response = self.get_success_response(
             self.organization.slug, qs_params={"features": "issue_basic"}
         )
-        assert response.data[0]["id"] == str(self.integration.id)
+        assert [item["id"] for item in response.data] == [str(self.integration.id)]
+
+    def test_feature_filter_supports_multiple_values_with_or_semantics(self) -> None:
+        response = self.get_success_response(
+            self.organization.slug,
+            qs_params={"features": ["issue-basic", "alert-rule"]},
+        )
+        assert [item["id"] for item in response.data] == [
+            str(self.integration.id),
+            str(self.msteams_integration.id),
+            str(self.slack_integration.id),
+        ]
+
+        response = self.get_success_response(
+            self.organization.slug,
+            qs_params={"features": ["alert-rule", "codeowners"]},
+        )
+        assert [item["id"] for item in response.data] == [
+            str(self.msteams_integration.id),
+            str(self.slack_integration.id),
+        ]
+
+    def test_feature_filter_no_match_returns_empty(self) -> None:
         response = self.get_success_response(
             self.organization.slug, qs_params={"features": "codeowners"}
         )
@@ -106,3 +138,16 @@ class OrganizationIntegrationsListTest(APITestCase):
         )
         assert response.data == {"detail": "Invalid integration type"}
         assert response.status_code == 400
+
+
+class TestFeatureNormalization:
+    def test_normalize_feature_name_treats_hyphens_and_underscores_as_equivalent(self) -> None:
+        assert normalize_feature_name("alert-rule") == "alert_rule"
+        assert normalize_feature_name("alert_rule") == "alert_rule"
+        assert normalize_feature_name("enterprise-incident-management") == (
+            "enterprise_incident_management"
+        )
+
+    def test_every_documented_value_normalizes_to_enum_identifier_form(self) -> None:
+        for feature in IntegrationFeatures:
+            assert normalize_feature_name(feature.value) == feature.name.lower()
