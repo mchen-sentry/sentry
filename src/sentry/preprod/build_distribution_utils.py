@@ -314,10 +314,26 @@ def find_latest_installable_artifact(
 
     install_groups_q = build_install_groups_q(install_groups) if install_groups else None
 
+    # App-Store-signed XCARCHIVE builds are not installable -- is_installable_artifact
+    # rejects them (an App-Store IPA cannot be sideloaded). find_latest_installable_artifact
+    # must agree, so exclude them from semver candidate selection. Mirrors the
+    # `extras.get("codesigning_type") == "app-store"` guard in is_installable_artifact,
+    # which this function's hand-built filter otherwise diverges from. Builds with no
+    # codesigning_type (NULL/missing JSON key) remain installable and are kept: a plain
+    # `.exclude(extras__codesigning_type="app-store")` would drop those rows too, since
+    # `NOT (NULL = 'app-store')` is NULL (falsy) in SQL.
+    apple_app_store_q = (
+        Q(extras__codesigning_type="app-store") & ~Q(extras__codesigning_type__isnull=True)
+        if platform == "apple"
+        else None
+    )
+
     # Get all distinct versions from installable artifacts only
     versions_queryset = PreprodArtifact.objects.filter(**filter_kwargs)
     if install_groups_q:
         versions_queryset = versions_queryset.filter(install_groups_q)
+    if apple_app_store_q is not None:
+        versions_queryset = versions_queryset.exclude(apple_app_store_q)
 
     all_versions = versions_queryset.values_list(
         "mobile_app_info__build_version", flat=True
@@ -351,6 +367,8 @@ def find_latest_installable_artifact(
     )
     if install_groups_q:
         potential_artifacts_qs = potential_artifacts_qs.filter(install_groups_q)
+    if apple_app_store_q is not None:
+        potential_artifacts_qs = potential_artifacts_qs.exclude(apple_app_store_q)
 
     return potential_artifacts_qs.first()
 

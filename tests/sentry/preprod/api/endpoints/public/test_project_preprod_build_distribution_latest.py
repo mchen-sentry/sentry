@@ -174,6 +174,37 @@ class LatestBuildModeTest(LatestBuildTestBase):
         response = self._get(self._get_url(), {"appId": "com.example.app", "platform": "android"})
         assert response.json()["latestArtifact"]["buildId"] == str(installable.id)
 
+    def test_excludes_app_store_signed_apple_builds(self) -> None:
+        # An App-Store-signed XCARCHIVE cannot be sideloaded and is not installable. Even
+        # when it is the highest version, the "latest installable build" must skip it and
+        # return the next-highest installable build with isInstallable=true / installUrl.
+        ios_file = self.create_file(name="test.xcarchive", type="application/octet-stream")
+        # App-store build: highest version, but not installable.
+        self._create_installable_artifact(
+            file_id=ios_file.id,
+            artifact_type=PreprodArtifact.ArtifactType.XCARCHIVE,
+            build_version="3.0.0",
+            build_number=300,
+            extras={"is_code_signature_valid": True, "codesigning_type": "app-store"},
+        )
+        # Development build: installable, lower version.
+        dev = self._create_installable_artifact(
+            file_id=ios_file.id,
+            artifact_type=PreprodArtifact.ArtifactType.XCARCHIVE,
+            build_version="2.0.0",
+            build_number=200,
+            extras={"is_code_signature_valid": True, "codesigning_type": "development"},
+        )
+
+        response = self._get(self._get_url(), {"appId": "com.example.app", "platform": "apple"})
+        assert response.status_code == 200
+        latest = response.json()["latestArtifact"]
+        assert latest is not None
+        assert latest["buildId"] == str(dev.id)
+        assert latest["platform"] == "APPLE"
+        assert latest["isInstallable"] is True
+        assert latest["installUrl"] is not None
+
     def test_only_returns_builds_for_this_project(self) -> None:
         other_project = self.create_project(organization=self.organization)
         self._create_installable_artifact(

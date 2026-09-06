@@ -1,6 +1,7 @@
 from django.urls import reverse
 
 from sentry.models.orgauthtoken import OrgAuthToken
+from sentry.preprod.build_distribution_utils import is_installable_artifact
 from sentry.preprod.models import PreprodArtifact
 from sentry.silo.base import SiloMode
 from sentry.testutils.cases import APITestCase
@@ -610,6 +611,52 @@ class ProjectPreprodCheckForUpdatesEndpointTest(APITestCase):
 
         # Should not return update because codesigning_type doesn't match
         assert data["update"] is None
+
+    def test_app_store_build_excluded_from_latest_when_codesigning_type_unset(self) -> None:
+        """App-Store-signed builds are not installable; even when they are the highest version
+        they must not be served as the "latest installable" update. Exercises the
+        codesigning_type=None path (no current artifact to inherit from, no query param),
+        which is where the app-store exclusion previously disappeared."""
+        # App-store build is the highest version but is not installable.
+        app_store = self._create_ios_artifact(
+            main_binary_identifier="app-store-id",
+            build_version="3.0.0",
+            build_number=300,
+            extras={"is_code_signature_valid": True, "codesigning_type": "app-store"},
+        )
+        # Development build is installable and is the next-highest version.
+        dev = self._create_ios_artifact(
+            main_binary_identifier="dev-id",
+            build_version="2.0.0",
+            build_number=200,
+            extras={"is_code_signature_valid": True, "codesigning_type": "development"},
+        )
+        assert is_installable_artifact(app_store) is False
+        assert is_installable_artifact(dev) is True
+
+        url = self._get_url()
+        # No matching current artifact (unknown main_binary_identifier) and no
+        # codesigning_type param -> effective_codesigning_type=None, the path
+        # where find_latest_installable_artifact previously failed to exclude app-store.
+        response = self.client.get(
+            url
+            + "?app_id=com.example.app&platform=ios&build_version=1.0.0&main_binary_identifier=does-not-exist",
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.api_token}",
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["current"] is None
+        # The latest installable is the development build, NOT the app-store build.
+        assert data["update"] is not None
+        assert data["update"]["build_version"] == "2.0.0"
+        assert data["update"]["build_number"] == 200
+        # A working download URL is served for the installable dev build (no broken link).
+        assert data["update"]["download_url"] != ""
+        # The non-installable app-store build (3.0.0) is never selected as the update.
+        assert data["update"]["build_version"] != "3.0.0"
 
     def test_codesigning_type_with_build_configuration(self) -> None:
         """Test that codesigning_type works correctly with build configurations"""
