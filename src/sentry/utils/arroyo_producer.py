@@ -67,11 +67,21 @@ class SingletonProducer:
         self._futures.append(future)
         if len(self._futures) >= self.max_futures:
             try:
-                future = self._futures.popleft()
+                oldest = self._futures.popleft()
             except IndexError:
                 return
-            else:
-                future.result()
+
+            # Backpressure: block until the oldest in-flight future resolves so we
+            # meter the producer. This is pacing, not error reporting -- a delivery
+            # failure of an *earlier*, unrelated message must not surface out of the
+            # current ``produce()`` call. Swallow delivery errors here, matching
+            # arroyo's ``FutureTrackingProducer._await_future`` and this file's own
+            # ``_shutdown``. Per-delivery failures are still observable via the
+            # ``arroyo.producer.produce_status`` metric emitted by ``ConfluentProducer``.
+            try:
+                oldest.result()
+            except Exception:
+                pass
 
     def _shutdown(self) -> None:
         for future in self._futures:
