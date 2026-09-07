@@ -32,7 +32,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
-from snuba_sdk import BooleanCondition, BooleanOp, Column, Condition, Function, Op
+from snuba_sdk import Column, Condition, Op
 from urllib3.exceptions import ReadTimeoutError
 
 from sentry import features, options
@@ -61,7 +61,7 @@ from sentry.search.eap.types import SearchResolverConfig
 from sentry.search.events.builder.base import BaseQueryBuilder
 from sentry.search.events.builder.discover import DiscoverQueryBuilder
 from sentry.search.events.constants import TIMEOUT_SPAN_ERROR_MESSAGE
-from sentry.search.events.types import QueryBuilderConfig, SnubaParams, WhereType
+from sentry.search.events.types import QueryBuilderConfig, SnubaParams
 from sentry.snuba.dataset import Dataset
 from sentry.snuba.occurrences_rpc import OccurrenceCategory
 from sentry.snuba.referrer import Referrer
@@ -75,7 +75,6 @@ from sentry.utils.snuba_rpc import get_traces_rpc
 MAX_SNUBA_RESULTS = 10_000
 
 CANDIDATE_SPAN_OPS = {"pageload", "navigation"}
-MATCHING_COUNT_ALIAS = "matching_count"
 
 
 def is_trace_name_candidate(span):
@@ -1062,63 +1061,6 @@ def process_rpc_user_queries(
     sentry_sdk.set_attribute("user_queries.raw_queries", user_queries)
 
     return queries
-
-
-OP_TO_FUNC = {
-    Op.GT: "greater",
-    Op.LT: "less",
-    Op.GTE: "greaterOrEquals",
-    Op.LTE: "lessOrEquals",
-    Op.EQ: "equals",
-    Op.NEQ: "notEquals",
-    Op.IN: "in",
-    Op.NOT_IN: "notIn",
-    Op.LIKE: "like",
-    Op.NOT_LIKE: "notLike",
-}
-
-
-def generate_trace_condition(span_conditions: list[WhereType]) -> WhereType | None:
-    trace_conditions: list[Function] = format_as_trace_conditions(span_conditions)
-
-    if not trace_conditions:
-        return None
-    elif len(trace_conditions) == 1:
-        return Condition(Function("countIf", trace_conditions), Op.GT, 0)
-    else:
-        return Condition(Function("countIf", [Function("and", trace_conditions)]), Op.GT, 0)
-
-
-def format_as_trace_conditions(span_conditions: list[WhereType]) -> list[Function]:
-    return [format_as_trace_condition(span_condition) for span_condition in span_conditions]
-
-
-def format_as_trace_condition(span_condition: WhereType) -> Function:
-    if isinstance(span_condition, Condition):
-        if span_condition.op == Op.IS_NULL:
-            return Function("isNull", span_condition.lhs)
-        elif span_condition.op == Op.IS_NOT_NULL:
-            return Function("isNotNull", span_condition.lhs)
-        else:
-            return Function(
-                OP_TO_FUNC[span_condition.op],
-                [span_condition.lhs, span_condition.rhs],
-            )
-    elif isinstance(span_condition, BooleanCondition):
-        if span_condition.op == BooleanOp.AND:
-            return Function(
-                "and",
-                format_as_trace_conditions(span_condition.conditions),
-            )
-        elif span_condition.op == BooleanOp.OR:
-            return Function(
-                "or",
-                format_as_trace_conditions(span_condition.conditions),
-            )
-        else:
-            raise ValueError(f"{span_condition.op} is not a BooleanOp")
-    else:
-        raise ValueError(f"{span_condition} is not a Condition or BooleanCondition")
 
 
 @dataclasses.dataclass
