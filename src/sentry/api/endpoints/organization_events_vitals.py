@@ -18,11 +18,11 @@ class OrganizationEventsVitalsEndpoint(OrganizationEventsEndpointBase):
         "GET": ApiPublishStatus.PRIVATE,
     }
     VITALS = {
-        "measurements.lcp": {"thresholds": [0, 2500, 4000]},
-        "measurements.fid": {"thresholds": [0, 100, 300]},
-        "measurements.cls": {"thresholds": [0, 0.1, 0.25]},
-        "measurements.fcp": {"thresholds": [0, 1000, 3000]},
-        "measurements.fp": {"thresholds": [0, 1000, 3000]},
+        "measurements.lcp",
+        "measurements.fid",
+        "measurements.cls",
+        "measurements.fcp",
+        "measurements.fp",
     }
 
     def get(self, request: Request, organization: Organization) -> Response:
