@@ -10,7 +10,6 @@ from typing import Any, Optional, TypedDict, cast
 
 import sentry_sdk
 from django.http import HttpRequest, HttpResponse
-from rest_framework.exceptions import ParseError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from sentry_relay.consts import SPAN_STATUS_CODE_TO_NAME
@@ -511,25 +510,6 @@ class TraceEvent:
         return result
 
 
-def find_timestamp_params(transactions: Sequence[SnubaTransaction]) -> dict[str, datetime | None]:
-    min_timestamp = None
-    max_timestamp = None
-    if transactions:
-        first_timestamp = datetime.fromisoformat(transactions[0]["timestamp"])
-        min_timestamp = first_timestamp
-        max_timestamp = first_timestamp
-        for transaction in transactions[1:]:
-            timestamp = datetime.fromisoformat(transaction["timestamp"])
-            if timestamp < min_timestamp:
-                min_timestamp = timestamp
-            elif timestamp > max_timestamp:
-                max_timestamp = timestamp
-    return {
-        "min": min_timestamp,
-        "max": max_timestamp,
-    }
-
-
 def is_root(item: SnubaTransaction) -> bool:
     return item.get("root", "0") == "1"
 
@@ -860,27 +840,6 @@ def query_trace_data(
     )
 
 
-def strip_span_id(span_id):
-    """Span ids are stored as integers in snuba to save space, but this means if the span id has a 00 prefix the
-    returned value is different
-
-        Need to do this with a while loop cause doing hex(int(span_id, 16)) will turn something like 0abc into abc which
-        differs from the behaviour we're seeing when clickhouse does it
-    """
-    result = span_id
-    while result.startswith("00"):
-        result = result.removeprefix("00")
-    return result
-
-
-def pad_span_id(span: str | None) -> str:
-    """Snuba might return the span id without leading 0s since they're stored as UInt64
-    which means a span like 0011 gets converted to an int, then back so we'll get `11` instead"""
-    if span is None:
-        return "0" * 16
-    return span.rjust(16, "0")
-
-
 class OrganizationEventsTraceEndpointBase(OrganizationEventsEndpointBase):
     publish_status = {
         "GET": ApiPublishStatus.PRIVATE,
@@ -1138,8 +1097,6 @@ class OrganizationEventsTraceEndpoint(OrganizationEventsTraceEndpointBase):
         if event_id is passed, we prune any potential branches of the trace to make as few nodestore calls as
         possible
         """
-        # Code past here is deprecated, but must continue to exist until sentry installs in every possible environment
-        # are storing span data, since that's the only way serialize_with_spans will work
         event_id_to_nodestore_event = self.nodestore_event_map(transactions)
         parent_map = self.construct_parent_map(transactions)
         error_map = self.construct_error_map(errors)
@@ -1318,107 +1275,6 @@ class OrganizationEventsTraceEndpoint(OrganizationEventsTraceEndpointBase):
             "transactions": serialized_transactions,
             "orphan_errors": [orphan for orphan in orphan_errors],
         }
-
-    def serialize_with_spans(
-        self,
-        limit: int,
-        transactions: Sequence[SnubaTransaction],
-        errors: Sequence[SnubaError],
-        roots: Sequence[SnubaTransaction],
-        warning_extra: dict[str, str],
-        event_id: str | None,
-        detailed: bool = False,
-        query_source: QuerySource | None = None,
-    ) -> SerializedTrace:
-        root_traces: list[TraceEvent] = []
-        orphans: list[TraceEvent] = []
-        orphan_event_ids: set[str] = set()
-        orphan_errors: list[SnubaError] = []
-        if detailed:
-            raise ParseError("Cannot return a detailed response using Spans")
-
-        with start_span(op="serialize", name="create parent map"):
-            parent_to_children_event_map = defaultdict(list)
-            serialized_transactions: list[TraceEvent] = []
-            for transaction in transactions:
-                parent_id = transaction["trace.parent_transaction"]
-                serialized_transaction = TraceEvent(
-                    transaction,
-                    parent_id,
-                    -1,
-                    span_serialized=True,
-                    query_source=query_source,
-                )
-                if parent_id is None:
-                    if transaction["trace.parent_span"]:
-                        orphans.append(serialized_transaction)
-                        orphan_event_ids.add(serialized_transaction.event["id"])
-                    else:
-                        root_traces.append(serialized_transaction)
-                else:
-                    parent_to_children_event_map[parent_id].append(serialized_transaction)
-                serialized_transactions.append(serialized_transaction)
-
-        parent_error_map = defaultdict(list)
-        for error in errors:
-            if error.get("trace.transaction") is not None:
-                parent_error_map[error["trace.transaction"]].append(self.serialize_error(error))
-            else:
-                orphan_errors.append(error)
-
-        with start_span(op="serialize", name="associate children"):
-            for trace_event in serialized_transactions:
-                event_id = trace_event.event["id"]
-                if event_id in parent_to_children_event_map:
-                    children_events = parent_to_children_event_map.pop(event_id)
-                    trace_event.children = sorted(children_events, key=child_sort_key)
-                if event_id in parent_error_map:
-                    trace_event.errors = sorted(
-                        parent_error_map.pop(event_id), key=lambda k: k["timestamp"]
-                    )
-
-        with start_span(op="serialize", name="more orphans"):
-            visited_transactions_ids: set[str] = {
-                root_trace.event["id"] for root_trace in root_traces
-            }
-            for serialized_transaction in sorted(serialized_transactions, key=child_sort_key):
-                if serialized_transaction.event["id"] not in visited_transactions_ids:
-                    if serialized_transaction.event["id"] not in orphan_event_ids:
-                        orphans.append(serialized_transaction)
-                        orphan_event_ids.add(serialized_transaction.event["id"])
-                    visited_transactions_ids.add(serialized_transaction.event["id"])
-                    for child in serialized_transaction.children:
-                        visited_transactions_ids.add(child.event["id"])
-
-        with start_span(op="serialize", name="sort"):
-            # Sort the results so they're consistent
-            orphan_errors.sort(key=lambda k: k["timestamp"])
-            root_traces.sort(key=child_sort_key)
-            orphans.sort(key=child_sort_key)
-
-        visited_transactions_in_serialization: set[str] = set()
-
-        result_transactions: list[FullResponse] = []
-        for root_trace in root_traces:
-            if root_trace.event["id"] in visited_transactions_in_serialization:
-                continue
-            result_transaction = root_trace.full_dict(
-                detailed, visited_transactions_in_serialization
-            )
-            if result_transaction is not None:
-                result_transactions.append(result_transaction)
-        for orphan in orphans:
-            if orphan.event["id"] in visited_transactions_in_serialization:
-                continue
-            serialized_orphan = orphan.full_dict(detailed, visited_transactions_in_serialization)
-            if serialized_orphan is not None:
-                result_transactions.append(serialized_orphan)
-
-        with start_span(op="serialize", name="to dict"):
-            return {
-                "transactions": result_transactions,
-                "orphan_errors": [self.serialize_error(error) for error in orphan_errors],
-            }
 
 
 @cell_silo_endpoint
