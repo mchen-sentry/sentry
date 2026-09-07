@@ -466,16 +466,6 @@ class OrganizationEndpoint(Endpoint):
             include_all_accessible=include_all_accessible,
         )
 
-    def get_requested_project_ids_unchecked(self, request: HttpRequest) -> set[int]:
-        """
-        Returns the numeric project ids that were requested by the request.
-        Non-numeric values (slugs) are silently ignored.
-
-        To determine the projects to filter this endpoint by with full
-        permission checking, use ``get_projects``, instead.
-        """
-        return self.get_requested_project_ids_and_slugs_unchecked(request).ids
-
     def get_requested_project_ids_and_slugs_unchecked(
         self, request: HttpRequest
     ) -> ParsedProjectIdOrSlugParams:
