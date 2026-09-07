@@ -84,19 +84,6 @@ class OrganizationEventsTrendsEndpointBase(OrganizationEventsEndpointBase):
     publish_status = {
         "GET": ApiPublishStatus.PRIVATE,
     }
-    trend_columns = {
-        "p50": "percentile_range({column}, 0.5, {condition}, {boundary}) as {query_alias}",
-        "p75": "percentile_range({column}, 0.75, {condition}, {boundary}) as {query_alias}",
-        "p95": "percentile_range({column}, 0.95, {condition}, {boundary}) as {query_alias}",
-        "p99": "percentile_range({column}, 0.99, {condition}, {boundary}) as {query_alias}",
-        "avg": "avg_range({column}, {condition}, {boundary}) as {query_alias}",
-        "variance": "variance_range(transaction.duration, {condition}, {boundary}) as {query_alias}",
-        "count_range": "count_range({condition}, {boundary}) as {query_alias}",
-        "percentage": "percentage({alias}_2, {alias}_1) as {query_alias}",
-        "difference": "minus({alias}_2,{alias}_1) as {query_alias}",
-        "t_test": "t_test({avg}_1, {avg}_2, variance_range_1, variance_range_2, count_range_1, count_range_2)",
-    }
-
     snql_trend_columns = {
         "p50": "percentile_range({column}, 0.5, {condition}, {boundary})",
         "p75": "percentile_range({column}, 0.75, {condition}, {boundary})",
