@@ -205,31 +205,6 @@ class SourceSerializer(serializers.Serializer):
         help_text="The GCS private key. Required for GCS sources if not using impersonated tokens. Invalid for all others.",
     )
 
-    def validate(self, data):
-        if data["type"] == "http":
-            required = ["type", "name", "url", "layout"]
-            allowed = required + ["username", "password"]
-        elif data["type"] == "s3":
-            required = ["type", "name", "bucket", "region", "access_key", "secret_key", "layout"]
-            allowed = required + ["prefix"]
-        else:
-            required = ["type", "name", "bucket", "client_email", "layout"]
-            allowed = required + ["prefix", "private_key"]
-
-        missing = [field for field in required if field not in data]
-        invalid = [field for field in data if field not in allowed]
-
-        err = ""
-        if missing:
-            err += f"Missing fields: {missing}\n"
-        if invalid:
-            err += f"Invalid fields: {invalid}"
-
-        if err:
-            raise serializers.ValidationError(err)
-
-        return data
-
 
 _SymbolSource: TypeAlias = dict[str, Any]
 """A custom symbol source entry. Shape varies by `type` (gcs, http, s3, …);
