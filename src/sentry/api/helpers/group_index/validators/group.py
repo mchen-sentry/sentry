@@ -5,7 +5,6 @@ from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from sentry.api.fields.actor import ActorField
-from sentry.api.helpers.group_index.validators.inbox_details import InboxDetailsValidator
 from sentry.api.helpers.group_index.validators.status_details import StatusDetailsValidator
 from sentry.models.group import STATUS_UPDATE_CHOICES, Group
 from sentry.types.actor import Actor
@@ -19,7 +18,6 @@ from sentry.types.group import SUBSTATUS_UPDATE_CHOICES, PriorityLevel
         "ignoreWindow",
         "ignoreUserCount",
         "ignoreUserWindow",
-        "inboxDetails",
         "snoozeDuration",
     ]
 )
@@ -75,8 +73,6 @@ class GroupValidator(serializers.Serializer[Group]):
     ignoreWindow = serializers.IntegerField(max_value=7 * 24 * 60)
     ignoreUserCount = serializers.IntegerField()
     ignoreUserWindow = serializers.IntegerField(max_value=7 * 24 * 60)
-    # The `inboxDetails`` field is empty.
-    inboxDetails = InboxDetailsValidator()
     # The `snooze` field is deprecated.
     # TODO(dcramer): remove in 9.0
     # for the moment, the CLI sends this for any issue update, so allow nulls
